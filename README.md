@@ -1,12 +1,12 @@
 # Starport
 
-**连接你的 AI、设备与算力。**
+![Starport — 连接你的 AI、设备与算力](docs/assets/starport-cover.svg)
 
-把已经部署的隔离客户端、软路由、Claude 会话、文件传输和训练服务整理为一个操作端管理入口。
+[快速开始](#快速开始) · [使用指南](docs/GUIDE.md) · [网络与出口](docs/NETWORK.md) · [安装与迁移](docs/INSTALL.md)
 
-**本仓库只包含通用代码、相对路径示例和文档。** 用户名、真实设备地址、订阅、节点密码、SSH 材料、面板访问码和运行记录保存在仓库外。不要把整个原工具目录复制进本仓库。
+Starport 将 AI 会话、设备连接、网络出口与计算资源汇聚到一个工作台。查看状态、传输文件、选择节点，让每一项工作有清晰的入口。
 
-## 安装
+## 快速开始
 
 先运行只读检测，再运行引导安装：
 
@@ -35,7 +35,7 @@ python3 -m venv .venv
 
 如果已有会话控制台的访问码文件满足私有权限要求，自动复用访问码；否则在外部配置目录生成新码。浏览器登录仍独立，访问码不进入 URL。
 
-## 提供的功能
+## 你的工作台
 
 | 模块 | 能力 |
 | --- | --- |
@@ -55,9 +55,9 @@ python3 -m venv .venv
 
 主命令为 `./bin/starport`。原 `./bin/claude-isolation` 命令、`claude-isolation-panel.service` 服务名及外部配置目录继续兼容；更名不改变现有路由、凭据或训练环境。
 
-## 范围
+## 部署方式
 
-这是 **已有环境接入和管理仓库**，不是从空白机器自动部署云实例、路由虚拟机及模型依赖的全量发行包。既有工具通过适配器复用，不复制原有凭据和机器专用部署脚本。完整重建需要先提供并审核环境配置，不能直接执行旧安装快照。
+Starport 通过适配器接入已有工具和服务。安装器负责管理面板的配置与注册；空白主机需要先部署路由、设备连接和所需计算环境。详细步骤见[安装与迁移](docs/INSTALL.md)。
 
 新机安装、真实管理员切换出口、代理全故障和整机冷启动都需要各自验收；“安装成功”不代替这些测试。
 
@@ -77,9 +77,12 @@ apply_exit.py        经过本机管理员授权的出口计划执行器
 
 文档：[日常使用](docs/GUIDE.md)、[服务注册](docs/SERVICES.md)、[软路由](docs/NETWORK.md)、[安装迁移](docs/INSTALL.md)、[信息边界](docs/SECURITY.md)。
 
+## 开发检查
+
+Markdown 渲染测试需要 Node.js；面板运行不依赖 Node.js。
+
 ```sh
 python3 -m unittest discover -s tests -v
+node --test tests/markdown.test.cjs
 python3 audit_repository.py
 ```
-
-本仓库不包含旧项目的 Git 历史、运行数据库、模型或下载缓存。审计程序用于仓库发布前检查，不拦截网页用户发送给 Claude 的消息。

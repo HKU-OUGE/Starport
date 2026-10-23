@@ -1,5 +1,7 @@
 # 日常使用
 
+连接你的 AI、设备与算力。
+
 ## 三个入口
 
 1. 管理面板：通过 `./bin/starport urls` 查看本机安装地址，默认端口 18882。
@@ -10,7 +12,15 @@
 
 ## 常用操作
 
-以下旧工具命令均在已有工具包根目录执行：
+在 Starport 目录中查询状态与入口：
+
+```sh
+./bin/starport status
+./bin/starport services
+./bin/starport router --internet
+```
+
+以下命令在已接入的工具包根目录执行：
 
 ```sh
 ./mac-mini ssh

@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="420" viewBox="0 0 1440 420" role="img" aria-label="Starport — 连接你的 AI、设备与算力">
+ <defs><linearGradient id="bg" x2="1" y2="1"><stop stop-color="#0d1c2d"/><stop offset="1" stop-color="#080d18"/></linearGradient><linearGradient id="orbit"><stop stop-color="#719dbf" stop-opacity="0"/><stop offset=".5" stop-color="#719dbf" stop-opacity=".7"/><stop offset="1" stop-color="#e6b77a" stop-opacity=".8"/></linearGradient></defs>
+ <rect width="1440" height="420" rx="12" fill="url(#bg)"/>
+ <rect x="1" y="1" width="1438" height="418" rx="12" fill="none" stroke="#26364b"/>
+ <g fill="none" stroke="url(#orbit)" stroke-width="1"><ellipse cx="1190" cy="215" rx="450" ry="140" transform="rotate(-30 1190 215)"/><ellipse cx="1190" cy="215" rx="350" ry="108" transform="rotate(-30 1190 215)"/><ellipse cx="1190" cy="215" rx="245" ry="77" transform="rotate(-30 1190 215)"/></g>
+ <g transform="translate(87 73) scale(.9)"><path d="M32 5A36 36 0 0 0 5 32M5 47A36 36 0 0 0 37 76M49 75A36 36 0 0 0 49 5" fill="none" stroke="#719dbf" stroke-width="1.25"/><path d="M49 5A36 36 0 0 1 72 57" fill="none" stroke="#e6b77a" stroke-width="1.8"/><path d="M40 20C43 34 46 37 60 40C46 43 43 46 40 60C37 46 34 43 20 40C34 37 37 34 40 20Z" fill="#edc48d"/></g>
+ <text x="86" y="238" fill="#f0ece3" font-size="84" font-weight="500" letter-spacing="-3" font-family="Inter,Arial,sans-serif">Starport</text>
+ <text x="91" y="295" fill="#a5b5c8" font-size="25" font-family="Noto Sans CJK SC,PingFang SC,Arial,sans-serif">连接你的 AI、设备与算力。</text>
+ <text x="92" y="356" fill="#83cbd0" font-size="13" letter-spacing="3" font-family="Arial,sans-serif">AI · DEVICES · COMPUTE</text>
+ <g fill="#e6b77a"><circle cx="966" cy="230" r="3"/><circle cx="1254" cy="84" r="2.5"/><circle cx="1322" cy="289" r="2"/><path d="M1165 154q4 24 28 28-24 4-28 28-4-24-28-28 24-4 28-28Z"/></g>
+ <g fill="#b0c5d9"><circle cx="799" cy="100" r="1"/><circle cx="1017" cy="61" r="1.2"/><circle cx="1352" cy="146" r="1"/><circle cx="827" cy="343" r="1.1"/><circle cx="1120" cy="343" r="1.3"/></g>
+</svg>
