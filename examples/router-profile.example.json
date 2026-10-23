@@ -1,0 +1,4 @@
+{
+  "ssh": ["ssh", "-T", "-o", "BatchMode=yes", "-o", "StrictHostKeyChecking=yes", "-o", "ForwardAgent=no", "isolated-router"],
+  "host_exit_dir": "../private/host-exit"
+}

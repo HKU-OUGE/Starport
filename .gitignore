@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+*.local.json
+.env
+state/
+work/
+dist/
+*.key
+*.pem
+*.sqlite*

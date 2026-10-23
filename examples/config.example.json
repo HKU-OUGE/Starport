@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "legacy_root": "../existing-tools",
+  "listen": ["127.0.0.1"],
+  "allowed_subnets": ["127.0.0.0/8"],
+  "port": 18882,
+  "access_key_file": "private/access.key",
+  "state_dir": "private/state",
+  "monitor_port": 18880,
+  "links": {"console": "http://127.0.0.1:18881/", "monitor_local": "http://127.0.0.1:18880/"}
+}

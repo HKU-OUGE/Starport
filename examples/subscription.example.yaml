@@ -1,0 +1,9 @@
+# EXAMPLE ONLY: reserved example domain; not an actual endpoint or credential.
+proxies:
+  - name: Example node
+    type: ss
+    server: proxy.example.invalid
+    port: 443
+    cipher: aes-128-gcm
+    password: EXAMPLE_ONLY_NOT_A_SECRET
+    udp: false
