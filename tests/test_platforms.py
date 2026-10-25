@@ -49,9 +49,10 @@ class PlatformTests(unittest.TestCase):
 
     def test_read_regular_unicode_and_reject_links(self):
         with tempfile.TemporaryDirectory() as folder:
-            path=Path(folder)/'資料 檔.txt';path.write_bytes(b'example')
+            root=Path(folder).resolve() if platform.system()=='Darwin' else Path(folder)
+            path=root/'資料 檔.txt';path.write_bytes(b'example')
             with os.fdopen(open_regular(path),'rb') as f:self.assertEqual(f.read(),b'example')
-            link=Path(folder)/'link.txt'
+            link=root/'link.txt'
             try:link.symlink_to(path)
             except OSError as exc:self.skipTest('Symlink creation unavailable: '+str(exc))
             with self.assertRaises((ValueError,OSError)):open_regular(link)

@@ -197,9 +197,17 @@ def windows_open_regular(path):
     final.argtypes = (wintypes.HANDLE,wintypes.LPWSTR,wintypes.DWORD,wintypes.DWORD)
     close = kernel.CloseHandle; close.argtypes=(wintypes.HANDLE,)
     buf=ctypes.create_unicode_buffer(32768)
+    long_name=kernel.GetLongPathNameW
+    long_name.argtypes=(wintypes.LPCWSTR,wintypes.LPWSTR,wintypes.DWORD)
+    expected=ctypes.create_unicode_buffer(32768)
     try:
+        expanded=long_name(str(path),expected,len(expected))
+        if not expanded or expanded>=len(expected):raise ValueError('media_path_changed')
         count=final(handle,buf,len(buf),0)
-        if not count or count>=len(buf) or os.path.normcase(buf.value.removeprefix('\\\\?\\')) != os.path.normcase(str(path)):
+        actual=buf.value
+        if actual.startswith('\\\\?\\UNC\\'):actual='\\\\'+actual[8:]
+        elif actual.startswith('\\\\?\\'):actual=actual[4:]
+        if not count or count>=len(buf) or os.path.normcase(actual) != os.path.normcase(expected.value):
             raise ValueError('media_path_changed')
         fd=msvcrt.open_osfhandle(handle,os.O_RDONLY|os.O_BINARY);handle=None
         import stat
