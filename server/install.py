@@ -11,6 +11,9 @@ import subprocess
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0,str(ROOT))
+from starport_common import services
+from starport_common.runtime import secure_dir,WINDOWS
 sys.path.insert(0, str(ROOT / 'server/console'))
 from settings import config_path, load, state_path, validate
 
@@ -36,12 +39,12 @@ def save(path, text):
     if path.exists():
         shutil.copy2(path, path.with_suffix(path.suffix + '.previous'))
     temp = path.with_suffix(path.suffix + '.tmp')
-    temp.write_text(text); temp.chmod(0o600); temp.replace(path)
+    temp.write_text(text, encoding='utf-8'); temp.chmod(0o600); temp.replace(path)
 
 
 def make_plan(args):
     config = load(args.config)
-    for key in ('host', 'port', 'ssh_host', 'public_origin', 'management_url'):
+    for key in ('host', 'port', 'ssh_host', 'client_platform', 'public_origin', 'management_url'):
         value = getattr(args, key, None)
         if value is not None:
             config[key] = value
@@ -70,7 +73,7 @@ def make_plan(args):
             raise ValueError('private_subnet_required')
         panel['allowed_subnets'] = [str(n) for n in nets]
     if panel_path.exists():
-        old = json.loads(panel_path.read_text())
+        old = json.loads(panel_path.read_text(encoding='utf-8'))
         for key in ('router', 'client_interface', 'monitor_port', 'links'):
             if key in old:
                 panel[key] = old[key]
@@ -80,25 +83,28 @@ def make_plan(args):
             panel['allowed_subnets'] = old.get('allowed_subnets', panel['allowed_subnets'])
     if args.router_profile:
         path = Path(args.router_profile).expanduser().resolve()
-        panel['router'] = json.loads(path.read_text())
-        exit_path = Path(panel['router']['host_exit_dir'])
-        panel['router']['host_exit_dir'] = str((path.parent / exit_path).resolve() if not exit_path.is_absolute() else exit_path)
+        panel['router'] = json.loads(path.read_text(encoding='utf-8'))
+        if 'host_exit_dir' in panel['router']:
+            exit_path = Path(panel['router']['host_exit_dir'])
+            panel['router']['host_exit_dir'] = str((path.parent / exit_path).resolve() if not exit_path.is_absolute() else exit_path)
     venv = ROOT / 'server/.venv'
-    python = venv / 'bin/python'
-    units = {
-        'starport-console.service': unit('Starport session console', [python, ROOT / 'server/console/server.py', '--config', destination]),
-        'starport-panel.service': unit('Starport management panel', [python, '-m', 'isolation_toolkit', '--config', panel_path, 'serve']),
-    }
+    system=getattr(args,'platform',None) or platform.system()
+    python = venv / ('Scripts/python.exe' if system=='Windows' else 'bin/python')
+    units=dict(services.definition(name,command,ROOT,system) for name,command in (
+        ('starport-console',[python,ROOT/'server/console/server.py','--config',destination]),
+        ('starport-panel',[python,'-m','isolation_toolkit','--config',panel_path,'serve'])))
     return config, panel, units
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(description='Install Starport on Linux')
+    parser = argparse.ArgumentParser(description='Install Starport on Linux, macOS or Windows')
+    parser.add_argument('--platform',choices=('Linux','Darwin','Windows'),help='Plan generation only')
     parser.add_argument('--config', help='External JSON configuration to import')
     parser.add_argument('--host', help='Loopback or private IPv4 listener')
     parser.add_argument('--port', type=int)
     parser.add_argument('--panel-port', type=int, default=18882)
     parser.add_argument('--ssh-host', help='SSH alias for Starship')
+    parser.add_argument('--client-platform',choices=('posix','windows'),help='Starship SSH command format; Linux/macOS use posix')
     parser.add_argument('--public-origin', help='Optional exact HTTPS tunnel origin')
     parser.add_argument('--management-url', help='Optional management link visible in the console')
     parser.add_argument('--allowed-subnet', action='append', help='Private subnet allowed to open the management panel')
@@ -117,9 +123,12 @@ def main(argv=None):
     if args.plan:
         print(json.dumps({'role': 'Starport', 'units': units, 'listener': config['host'],
                           'console_port': config['port'], 'panel_port': panel['port']}, indent=2)); return
-    missing = [x for x in ('systemctl', 'ssh', 'node', 'npm') if not shutil.which(x)]
-    if platform.system() != 'Linux' or sys.version_info < (3, 10) or missing:
-        parser.error('Requires Linux, Python 3.10+, systemd, OpenSSH, Node.js 22.12+ and npm. Missing: ' + ', '.join(missing))
+    if args.platform:parser.error('--platform is only valid with --plan')
+    system=platform.system()
+    manager={'Linux':'systemctl','Darwin':'launchctl','Windows':'schtasks.exe'}.get(system)
+    missing=[x for x in (manager or 'unsupported-platform','ssh','node','npm') if not shutil.which(x)]
+    if system not in ('Linux','Darwin','Windows') or sys.version_info < (3, 10) or missing:
+        parser.error('Requires Python 3.10+, a supported service manager, OpenSSH, Node.js 22.12+ and npm. Missing: ' + ', '.join(missing))
     use_uv = importlib.util.find_spec('ensurepip') is None
     if use_uv and not shutil.which('uv'):
         parser.error('Python venv support is missing. Install the matching python3-venv package or uv first.')
@@ -131,33 +140,32 @@ def main(argv=None):
     if not args.yes and input('Install Starport console and panel? [y/N] ').lower() != 'y':
         return
     venv = ROOT / 'server/.venv'
+    python=venv/('Scripts/python.exe' if WINDOWS else 'bin/python')
     if use_uv:
         subprocess.run(['uv', 'venv', '--python', sys.executable, '--allow-existing', str(venv)], check=True)
-        subprocess.run(['uv', 'pip', 'install', '--python', str(venv / 'bin/python'), '-r', str(ROOT / 'server/requirements.txt')], check=True)
+        subprocess.run(['uv', 'pip', 'install', '--python', str(python), '-r', str(ROOT / 'server/requirements.txt')], check=True)
     else:
         subprocess.run([sys.executable, '-m', 'venv', str(venv)], check=True)
-        subprocess.run([str(venv / 'bin/python'), '-m', 'pip', 'install', '-r', str(ROOT / 'server/requirements.txt')], check=True)
+        subprocess.run([str(python), '-m', 'pip', 'install', '-r', str(ROOT / 'server/requirements.txt')], check=True)
     web = ROOT / 'server/console/web'
-    subprocess.run(['npm', 'ci', '--ignore-scripts', '--no-audit', '--no-fund'], cwd=web, check=True)
-    subprocess.run(['npm', 'run', 'build'], cwd=web, check=True)
-    (venv / '.starport-ready').write_text('ready\n')
+    subprocess.run([shutil.which('npm') or 'npm', 'ci', '--ignore-scripts', '--no-audit', '--no-fund'], cwd=web, check=True)
+    subprocess.run([shutil.which('npm') or 'npm', 'run', 'build'], cwd=web, check=True)
+    (venv / '.starport-ready').write_text('ready\n', encoding='utf-8')
     config_file = config_path()
     state = Path(config['state_dir'])
-    state.mkdir(mode=0o700, parents=True, exist_ok=True)
+    secure_dir(state)
+    secure_dir(config_file.parent)
     key = state / 'access.key'
     if not key.exists():
         save(key, secrets.token_urlsafe(32) + '\n')
     save(config_file, json.dumps(config, indent=2) + '\n')
     save(config_file.parent / 'config.json', json.dumps(panel, indent=2) + '\n')
-    unit_dir = Path(os.environ.get('XDG_CONFIG_HOME', Path.home() / '.config')) / 'systemd/user'
-    for name, text in units.items():
-        save(unit_dir / name, text)
-    subprocess.run(['systemctl', '--user', 'daemon-reload'], check=True)
-    subprocess.run(['systemctl', '--user', 'enable', *units], check=True)
-    if not args.no_start:
-        subprocess.run(['systemctl', '--user', 'restart', *units], check=True)
+    definitions=dict(services.prepare(name,command,ROOT,state,python) for name,command in (
+        ('starport-console',[python,ROOT/'server/console/server.py','--config',config_file]),
+        ('starport-panel',[python,'-m','isolation_toolkit','--config',config_file.parent/'config.json','serve'])))
+    services.register(definitions,args.no_start)
     print('Starport installed. Use ./bin/starport urls and ./bin/starport key.')
-    print('User services start at login; linger is an explicit host setting.')
+    print('Services start in the user session. Linux linger is an optional host setting.')
 
 
 if __name__ == '__main__':

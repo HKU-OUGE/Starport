@@ -46,7 +46,7 @@ class RichContentTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'changed'): store.read('a', item['id'], [project], 0, 1)
             link = project / 'linked.png'; link.symlink_to(path)
             with self.assertRaises(OSError): store.register_file('a', str(link), [project])
-            path.write_text('not an image')
+            path.write_text('not an image', encoding='utf-8')
             with self.assertRaisesRegex(ValueError, 'type_mismatch'): store.register_file('a', str(path), [project])
 
     def test_senduserfile_creates_media_card_and_inline_images_are_not_in_payload(self):

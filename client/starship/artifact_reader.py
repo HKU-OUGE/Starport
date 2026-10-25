@@ -1,3 +1,5 @@
+import tempfile
+from bootstrap import ipc_request,desktop_home
 """Read-only artifact snapshots from authorized session records.
 
 No account credentials, arbitrary paths, URLs or commands are accepted.
@@ -23,22 +25,8 @@ SID = re.compile(r'(?:cse_[A-Za-z0-9]{16,64}|[a-f0-9-]{36})')
 
 
 def native_rpc(data):
-    with socket.socket(socket.AF_UNIX) as connection:
-        connection.settimeout(55)
-        connection.connect(str(BASE / 'state/control.sock'))
-        connection.sendall(json.dumps(data).encode() + b'\n')
-        connection.shutdown(socket.SHUT_WR)
-        raw = bytearray()
-        while True:
-            part = connection.recv(65536)
-            if not part:
-                break
-            raw.extend(part)
-            if len(raw) > 4 * 1024 * 1024:
-                raise ValueError('artifact_source_limit')
-    value = json.loads(raw)
-    if not value.get('ok'):
-        raise ValueError('artifact_session_unavailable')
+    value=ipc_request(BASE/'state/control.rpc',data,timeout=55)
+    if not value.get('ok'):raise ValueError('artifact_session_unavailable')
     return value
 
 
@@ -341,8 +329,8 @@ def replay_source(rows, slug, asset_roots=()):
                     if len(matches)==1:uploads.append((matches[0],size,mime,asset,digest))
                 for file,size,mime,asset,digest in uploads:
                     p=Path(file)
-                    approved = HOME/'Library/Application Support/Claude/scratch-workspaces'
-                    temporary = Path('/private/tmp')/('claude-'+str(os.getuid()))
+                    approved = desktop_home(HOME)/'scratch-workspaces'
+                    temporary = Path(tempfile.gettempdir())/('claude-'+str(getattr(os,'getuid',lambda:0)()))
                     if not any(root in p.parents for root in (approved, HOME/'.claude/projects', temporary,*asset_roots)) or '..' in p.parts:continue
                     if file not in call.get('file_paths',[call.get('file_path')]) or int(size)>MAX_IMAGE:continue
                     try:
@@ -400,7 +388,7 @@ def published_html(rows, aid, asset_roots=()):
                 candidates.append((stamp,call))
     if not candidates:return None
     stamp,call=max(candidates,key=lambda x:x[0]);path=Path(call['file_path'])
-    approved=(HOME/'Library/Application Support/Claude/scratch-workspaces',Path('/private/tmp')/('claude-'+str(os.getuid())),*asset_roots)
+    approved=(desktop_home(HOME)/'scratch-workspaces',Path(tempfile.gettempdir())/('claude-'+str(getattr(os,'getuid',lambda:0)())),*asset_roots)
     if not any(root in path.parents for root in approved) or '..' in path.parts:return None
     try:
         with os.fdopen(safe_file(path),'rb') as file:body=file.read(512*1024+1)

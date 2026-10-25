@@ -1,8 +1,9 @@
+from bootstrap import RPCServer,ipc_stdio,secure_dir,desktop_home,process_options,stop_process,runner_environment,process_commands
 """Local session runner with a bounded Unix-socket control protocol."""
 from collections import deque
 from datetime import datetime, timezone
 from pathlib import Path
-import fcntl
+from bootstrap import fcntl
 import hashlib
 import json
 import os
@@ -20,7 +21,7 @@ from rich_content import MediaStore, blocks_to_events, bounded_events
 
 BASE = Path.home() / '.local/share/starship'
 STATE = BASE / 'state'
-SOCKET = STATE / 'control.sock'
+SOCKET = STATE / 'control.rpc'
 LOCK = threading.RLock()
 RUNS = {}
 INDEX = {}
@@ -36,7 +37,7 @@ def now():
 
 def write_json(path, value):
     temporary = path.with_suffix('.tmp')
-    temporary.write_text(json.dumps(value, ensure_ascii=False))
+    temporary.write_text(json.dumps(value, ensure_ascii=False), encoding='utf-8')
     temporary.replace(path)
 
 
@@ -54,7 +55,7 @@ def cli():
         if not executable.is_file() or not os.access(executable, os.X_OK):
             raise ValueError('runner_unavailable')
         return str(executable)
-    root = Path.home() / 'Library/Application Support/Claude/claude-code'
+    root = desktop_home() / 'claude-code'
     versions = sorted((p for p in (root.iterdir() if root.is_dir() else []) if re.fullmatch(r'\d+\.\d+\.\d+', p.name)),
                       key=lambda p: tuple(map(int, p.name.split('.'))), reverse=True)
     for version in versions:
@@ -164,7 +165,7 @@ def read_session(sid):
     path = session_file(sid)
     if not path.is_file():
         raise ValueError('session_not_found')
-    return json.loads(path.read_text())
+    return json.loads(path.read_text(encoding='utf-8'))
 
 
 def save_session(item):
@@ -177,7 +178,7 @@ def add_event(sid, role, text='', **extra):
         item = read_session(sid)
         sequence = item.get('sequence', 0) + 1
         row = {'seq': sequence, 'role': role, 'text': clean(text, 64000), 'time': now(), **extra}
-        with (STATE / (sid + '.events.jsonl')).open('a') as stream:
+        with (STATE / (sid + '.events.jsonl')).open('a+') as stream:
             stream.write(json.dumps(row, ensure_ascii=False) + '\n')
         item['sequence'] = sequence
         save_session(item)
@@ -201,12 +202,32 @@ def auth_status():
 
 
 def existing_process(sid):
-    result = subprocess.run(['ps', '-axo', 'command='], capture_output=True, text=True, timeout=5)
-    return any(sid in line and ('/claude' in line or 'claude --' in line) for line in result.stdout.splitlines())
+    return any(sid in (line or '') and 'claude' in line.lower() for line in process_commands())
 
 
 from remote_control import Controller
 REMOTE = Controller(desktop_index)
+
+
+def attachment_session(sid):
+    if sid.startswith('cse_'):
+        REMOTE.get(sid)
+    else:
+        read_session(sid)
+
+
+def attachment_project(sid):
+    if not sid.startswith('cse_'):return safe_directory(read_session(sid)['cwd'])
+    from document_reader import resolve_project
+    item,bound=REMOTE.get(sid)
+    project=resolve_project(sid,REMOTE.public(item,bound),desktop_index())
+    if project is None:raise ValueError('attachment_requires_local_project')
+    return safe_directory(str(project))
+
+
+from uploads import Uploads
+UPLOADS=Uploads(STATE/'uploads',attachment_project,attachment_session)
+REMOTE.attachment_content=UPLOADS.content
 
 
 class Run:
@@ -241,12 +262,9 @@ class Run:
             args += ['--resume', self.sid]
         else:
             args += ['--session-id', self.sid]
-        environment = {'HOME': str(Path.home()), 'USER': Path.home().name, 'LOGNAME': Path.home().name,
-                       'PATH': str(Path.home() / '.local/bin') + ':/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin',
-                       'LANG': 'en_US.UTF-8', 'TZ': 'UTC', 'CLAUDE_CODE_ENTRYPOINT': 'sdk-py'}
-        self.process = subprocess.Popen(args, cwd=str(safe_directory(self.session['cwd'])), env=environment,
+        self.process = subprocess.Popen(args, cwd=str(safe_directory(self.session['cwd'])), env=runner_environment(),
                                         stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                                        text=True, bufsize=1, start_new_session=True)
+                                        text=True, encoding='utf-8', bufsize=1, **process_options())
         if self.cancelled:
             self.stop()
             raise ValueError('session_stopped_before_launch')
@@ -333,7 +351,7 @@ class Run:
                             'request': {'subtype': 'interrupt'}})
             except (ValueError, OSError):
                 pass
-            os.killpg(self.process.pid, signal.SIGTERM)
+            stop_process(self.process)
         set_status(self.sid, 'stopped')
 
 
@@ -341,7 +359,7 @@ def list_sessions():
     output = [public_session(x) for x in desktop_index().values()]
     for file in STATE.glob('*.json'):
         if re.fullmatch(r'[0-9a-f-]{36}\.json', file.name):
-            item = json.loads(file.read_text())
+            item = json.loads(file.read_text(encoding='utf-8'))
             output = [x for x in output if x['id'] != item['id']]
             output.append(public_session(item))
     remote = REMOTE.list_public()
@@ -351,6 +369,10 @@ def list_sessions():
 
 
 def dispatch(data):
+    if data.get('action')=='attachment':return UPLOADS.dispatch(data.get('request'))
+    if data.get('action')=='artifact_sync':
+        from artifact_sync_control import dispatch as refresh
+        return refresh(data.get('request'))
     if re.fullmatch(r'cse_[A-Za-z0-9]{16,64}', str(data.get('session_id', ''))):
         return REMOTE.dispatch(data)
     if data.get('action') in {'create', 'stop', 'permission'}:
@@ -461,8 +483,10 @@ def _dispatch(data):
         sid = data.get('session_id', '')
         message = data.get('message', '')
         op = data.get('operation_id', '')
-        if not isinstance(message, str) or not 1 <= len(message) <= 24000 or not re.fullmatch(r'[0-9a-f-]{36}', op):
+        ids=data.get('attachments',[])
+        if not isinstance(message, str) or len(message)>24000 or not (message or ids) or not re.fullmatch(r'[0-9a-f-]{36}', op):
             raise ValueError('invalid_message')
+        content=UPLOADS.content(sid,ids,message) if ids else message
         with LOCK:
             session = read_session(sid)
             if op in session['operation_keys']:
@@ -492,7 +516,7 @@ def _dispatch(data):
                     if run.cancelled or read_session(sid)['status'] == 'stopped':
                         return
                     set_status(sid, 'running')
-                    run.write({'type': 'user', 'session_id': sid, 'message': {'role': 'user', 'content': message},
+                    run.write({'type': 'user', 'session_id': sid, 'message': {'role': 'user', 'content': content},
                                'parent_tool_use_id': None, 'uuid': op})
             except Exception as exc:
                 if not run.cancelled:
@@ -539,56 +563,20 @@ def _dispatch(data):
     raise ValueError('unknown_action')
 
 
-class Handler(socketserver.StreamRequestHandler):
-    def handle(self):
-        self.request.settimeout(60)
-        raw = self.rfile.readline(MAX_REQUEST + 1)
-        if len(raw) > MAX_REQUEST:
-            return
-        try:
-            data = json.loads(raw)
-            result = {'ok': True, **dispatch(data)}
-        except Exception as exc:
-            result = {'ok': False, 'error': clean(str(exc), 300)}
-        self.wfile.write(json.dumps(result, ensure_ascii=False).encode() + b'\n')
-
-
 def main():
     os.umask(0o077)
-    if len(sys.argv) > 1 and sys.argv[1] == 'rpc':
-        raw = sys.stdin.buffer.readline(MAX_REQUEST + 1)
-        if len(raw) > MAX_REQUEST:
-            raise SystemExit('Request too large')
-        with socket.socket(socket.AF_UNIX) as connection:
-            connection.settimeout(65)
-            connection.connect(str(SOCKET))
-            connection.sendall(raw.rstrip(b'\n') + b'\n')
-            connection.shutdown(socket.SHUT_WR)
-            total = 0
-            while True:
-                chunk = connection.recv(65536)
-                if not chunk:
-                    break
-                total += len(chunk)
-                if total > 4 * 1024 * 1024:
-                    raise SystemExit('Response too large')
-                sys.stdout.buffer.write(chunk)
-        return
-    STATE.mkdir(parents=True, exist_ok=True, mode=0o700)
-    guard = (STATE / 'service.lock').open('a')
-    fcntl.flock(guard, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    if len(sys.argv)>1 and sys.argv[1]=='rpc':
+        return ipc_stdio(SOCKET)
+    secure_dir(STATE)
+    guard=(STATE/'service.lock').open('a+')
+    fcntl.flock(guard,fcntl.LOCK_EX|fcntl.LOCK_NB)
     for file in STATE.glob('*.json'):
-        if re.fullmatch(r'[0-9a-f-]{36}\.json', file.name):
-            item = json.loads(file.read_text())
-            if item['status'] in {'running', 'starting', 'waiting_approval'}:
-                set_status(item['id'], 'interrupted')
-    SOCKET.unlink(missing_ok=True)
-    class Server(socketserver.ThreadingUnixStreamServer):
-        daemon_threads = True
-    with Server(str(SOCKET), Handler) as server:
-        os.chmod(SOCKET, 0o600)
-        server.serve_forever()
+        if re.fullmatch(r'[0-9a-f-]{36}\.json',file.name):
+            item=json.loads(file.read_text(encoding='utf-8'))
+            if item['status'] in {'running','starting','waiting_approval'}:set_status(item['id'],'interrupted')
+    def handle(data):
+        if not isinstance(data,dict):raise ValueError('invalid_request')
+        return {'ok':True,**dispatch(data)}
+    with RPCServer(SOCKET,handle) as service:service.serve_forever()
 
-
-if __name__ == '__main__':
-    main()
+if __name__=='__main__':main()

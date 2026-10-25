@@ -1,6 +1,7 @@
+from bootstrap import fcntl
 """Background, read-only refresh of authenticated artifact download snapshots."""
 from pathlib import Path
-import base64,datetime,fcntl,hashlib,io,json,os,re,shutil,subprocess,threading,time,uuid,zipfile
+import base64,datetime,hashlib,io,json,os,re,shutil,subprocess,threading,time,uuid,zipfile
 from artifact_exports import latest_export,export_bundle,regular_bytes,MAX_BUNDLE
 from artifact_view import document_view
 BASE=Path(__file__).resolve().parent
@@ -9,7 +10,7 @@ def now():return datetime.datetime.now(datetime.timezone.utc).isoformat()
 
 def atomic_json(path,value):
  path.parent.mkdir(parents=True,exist_ok=True,mode=0o700)
- tmp=path.with_name(path.name+'.'+uuid.uuid4().hex+'.tmp');tmp.write_text(json.dumps(value,ensure_ascii=False,indent=2));os.chmod(tmp,0o600);os.replace(tmp,path)
+ tmp=path.with_name(path.name+'.'+uuid.uuid4().hex+'.tmp');tmp.write_text(json.dumps(value,ensure_ascii=False,indent=2), encoding='utf-8');os.chmod(tmp,0o600);os.replace(tmp,path)
 
 def render(value):
  result=subprocess.run([shutil.which('node') or 'node',str(BASE/'web/artifact-render-cli.mjs')],input=json.dumps(value,ensure_ascii=False).encode(),capture_output=True,timeout=20)

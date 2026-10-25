@@ -19,7 +19,7 @@ from .subscriptions import Subscriptions
 
 def serve(config):
     state = Path(config['state_dir']); state.mkdir(parents=True, exist_ok=True, mode=0o700)
-    key = Path(config['access_key_file']).read_text().strip()
+    key = Path(config['access_key_file']).read_text(encoding='utf-8').strip()
     if len(key) < 24:
         raise ValueError('access_key_too_short')
     manager = Manager(config)
@@ -106,9 +106,9 @@ def serve(config):
                     return self.respond(200, {'actions': [{'id': r[0], 'status': r[1], 'result': json.loads(r[2]) if r[2] else None, 'created': r[3]} for r in rows]})
                 if path.startswith('/api/docs/'):
                     name = path.removeprefix('/api/docs/')
-                    if name not in ('GUIDE', 'SERVICES', 'NETWORK', 'INSTALL', 'SECURITY'):
+                    if name not in ('GUIDE', 'CONSOLE', 'SERVICES', 'NETWORK', 'INSTALL', 'SECURITY'):
                         return self.respond(404, {'error': 'not_found'})
-                    return self.respond(200, {'name': name, 'text': (ROOT / 'docs' / (name + '.md')).read_text()})
+                    return self.respond(200, {'name': name, 'text': (ROOT / 'docs' / (name + '.md')).read_text(encoding='utf-8')})
                 return self.respond(404, {'error': 'not_found'})
             except Exception:
                 return self.respond(503, {'error': 'status_temporarily_unavailable'})

@@ -25,15 +25,15 @@ class StoreTests(unittest.TestCase):
   with tempfile.TemporaryDirectory() as d:
    store=SnapshotStore(Path(d)/'cache');store.save('session:'+A,record(A),time.time()-90000);self.assertEqual(store.load(),[])
    with self.assertRaises(ValueError):store.path('../../secrets')
-   target=Path(d)/'private';target.write_text('retained');p=store.path('session:'+A);p.symlink_to(target)
+   target=Path(d)/'private';target.write_text('retained', encoding='utf-8');p=store.path('session:'+A);p.symlink_to(target)
    with self.assertRaisesRegex(ValueError,'invalid_snapshot_file'):store.save('session:'+A,record(A),time.time())
-   self.assertEqual(target.read_text(),'retained');self.assertEqual(store.load(),[])
-   p.unlink();p.write_text('{invalid');self.assertEqual(store.load(),[])
+   self.assertEqual(target.read_text(encoding='utf-8'),'retained');self.assertEqual(store.load(),[])
+   p.unlink();p.write_text('{invalid', encoding='utf-8');self.assertEqual(store.load(),[])
  def test_capacity_recycles_only_cache_files(self):
   with tempfile.TemporaryDirectory() as d:
-   store=SnapshotStore(Path(d)/'cache',max_files=1);unrelated=store.root/'keep.txt';unrelated.write_text('keep')
+   store=SnapshotStore(Path(d)/'cache',max_files=1);unrelated=store.root/'keep.txt';unrelated.write_text('keep', encoding='utf-8')
    store.save('session:'+A,record(A),time.time()-2);store.save('session:'+B,record(B),time.time())
-   self.assertFalse(store.path('session:'+A).exists());self.assertTrue(store.path('session:'+B).exists());self.assertEqual(unrelated.read_text(),'keep')
+   self.assertFalse(store.path('session:'+A).exists());self.assertTrue(store.path('session:'+B).exists());self.assertEqual(unrelated.read_text(encoding='utf-8'),'keep')
  def test_unchanged_snapshot_refreshes_timestamp_without_rewrite(self):
   with tempfile.TemporaryDirectory() as d:
    store=SnapshotStore(Path(d)/'cache');stamp=time.time()-5;store.save('session:'+A,record(A),stamp);p=store.path('session:'+A);inode=p.stat().st_ino

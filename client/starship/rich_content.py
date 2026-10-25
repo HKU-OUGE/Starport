@@ -1,3 +1,4 @@
+from bootstrap import WINDOWS,windows_open_regular
 """Bounded transcript presentation and session-scoped, read-only media."""
 from pathlib import Path
 from contextlib import contextmanager
@@ -53,6 +54,7 @@ def mime_valid(mime, head):
 
 
 def open_regular(path):
+    if WINDOWS:return windows_open_regular(path)
     """Open every component without following symlinks, including the root."""
     if not path.is_absolute() or '..' in path.parts:
         raise ValueError('media_path_blocked')

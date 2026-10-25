@@ -5,6 +5,7 @@ from collections import Counter
 import hashlib
 import json
 import os
+import platform
 import re
 import shutil
 import subprocess
@@ -29,6 +30,15 @@ def systemctl(scope, *args):
 
 
 def inventory(scope):
+    if platform.system()!='Linux':
+        if scope!='user':return {'scope':scope,'services':[]}
+        from starport_common.inventory import user_services
+        try:native=user_services()
+        except (OSError,ValueError,subprocess.TimeoutExpired):return {'scope':scope,'services':[],'error':'service_inventory_unavailable'}
+        return {'scope':scope,'services':[{'group':'claude','title':r['name'],'note':'','id':'user:'+r['name'],'unit':r['name'],'scope':'user',
+             'active':'active' if r['running'] else 'inactive','sub':'running' if r['running'] else 'stopped','enabled':'enabled',
+             'health':'running' if r['running'] else 'stopped','registered':True,'registration':r['manager'],'pid':r['pid'],
+             'result':'','restarts':0,'restart_policy':'supervised','since':None,'actions':[],'after':[],'requires':[]} for r in native]}
     rc, raw = run(systemctl(scope, 'list-unit-files', '--no-legend', '--plain', '--type=service,timer'))
     if rc:
         return {'scope': scope, 'error': 'service_inventory_unavailable', 'services': []}
@@ -96,8 +106,10 @@ class Manager:
         root = Path(self.config['legacy_root']) if self.config.get('legacy_root') else None
         tools = [{**t, 'available': bool(root and (root / t['path']).exists())} for t in TOOLS]
         disk = shutil.disk_usage(root if root and root.exists() else Path.home())
-        rc, linger = run(['/usr/bin/loginctl', 'show-user', str(os.getuid()), '--property=Linger', '--value'])
-        rc, raw = run(['/usr/sbin/ip', '-j', 'address', 'show'])
+        if platform.system()=='Linux':
+            rc, linger = run(['/usr/bin/loginctl', 'show-user', str(os.getuid()), '--property=Linger', '--value'])
+            rc, raw = run([shutil.which('ip') or 'ip', '-j', 'address', 'show'])
+        else:linger,raw='','[]'
         try:
             network = [{'name': n['ifname'], 'state': n['operstate'], 'master': n.get('master'),
                         'addresses': [a['local'] + '/' + str(a['prefixlen']) for a in n.get('addr_info', []) if a.get('family') == 'inet']}
@@ -124,6 +136,10 @@ class Manager:
 
         def worker():
             try:
+                if self.config.get('router',{}).get('executor_ssh'):
+                    from .router_remote import call
+                    result=call(self.config,{'action':'status','internet':internet})['status']
+                    return
                 if not self.config.get('legacy_root'):
                     raise ValueError('router_adapter_missing')
                 script = Path(self.config['legacy_root']) / 'router-status.sh'

@@ -1,6 +1,7 @@
+from bootstrap import RPCServer,ipc_stdio,secure_dir
 """Session-only model controls. Native credentials never leave this process."""
 from pathlib import Path
-import fcntl
+from bootstrap import fcntl
 import hashlib
 import json
 import os
@@ -18,7 +19,7 @@ from remote_control import Controller
 
 BASE = Path.home() / '.local/share/starship'
 ROOT = BASE / 'state/model-settings'
-SOCKET = BASE / 'state/model-settings.sock'
+SOCKET = BASE / 'state/model-settings.rpc'
 MODELS = ('opus', 'sonnet', 'haiku', 'fable', 'default')
 EFFORTS = ('low', 'medium', 'high', 'xhigh', 'max')
 
@@ -113,7 +114,7 @@ class SettingsService:
         self.records = {}
         for path in self.root.glob('*.json'):
             if re.fullmatch(r'[a-f0-9-]{36}\.json', path.name) and not path.is_symlink() and path.stat().st_size < 16384:
-                row = json.loads(path.read_text())
+                row = json.loads(path.read_text(encoding='utf-8'))
                 if row['state'] in ('requested', 'accepted'):
                     row.update(state='unconfirmed', error='model_settings_outcome_unknown')
                 self.records[row['operation_id']] = row
@@ -124,7 +125,7 @@ class SettingsService:
             self.records[row['operation_id']] = row
             path = self.root / (row['operation_id'] + '.json')
             temporary = path.with_suffix('.tmp')
-            temporary.write_text(json.dumps(row)); temporary.chmod(0o600); temporary.replace(path)
+            temporary.write_text(json.dumps(row), encoding='utf-8'); temporary.chmod(0o600); temporary.replace(path)
             old = sorted(self.records.values(), key=lambda x: x['updated_at'])
             for prior in old[:-256]:
                 if prior['state'] not in ('requested', 'accepted', 'unconfirmed'):
@@ -226,59 +227,15 @@ class SettingsService:
 
 def main():
     os.umask(0o077)
-    mode = sys.argv[1] if len(sys.argv) == 2 else ''
-    if mode == 'install':
-        path = Path.home() / 'Library/LaunchAgents/io.starport.starship-model-settings.plist'
-        if path.exists():
-            raise ValueError('settings_agent_already_installed')
-        path.write_bytes(plistlib.dumps({'Label': 'io.starport.starship-model-settings',
-            'ProgramArguments': [sys.executable, str(BASE / 'model_settings.py'), 'serve'],
-            'RunAtLoad': True, 'KeepAlive': {'SuccessfulExit': False}, 'ThrottleInterval': 5,
-            'StandardErrorPath': str(BASE / 'state/model-settings-agent.log')}))
-        path.chmod(0o600)
-        subprocess.run(['/bin/launchctl', 'bootstrap', 'gui/' + str(os.getuid()), str(path)], check=True)
-        print(json.dumps({'ok': True})); return
-    if mode == 'rpc':
-        raw = sys.stdin.buffer.readline(4097)
-        if len(raw) > 4096:
-            raise ValueError('model_settings_request_limit')
-        with socket.socket(socket.AF_UNIX) as connection:
-            connection.settimeout(50); connection.connect(str(SOCKET))
-            connection.sendall(raw.rstrip(b'\n') + b'\n'); connection.shutdown(socket.SHUT_WR)
-            body = bytearray()
-            while True:
-                chunk = connection.recv(4096)
-                if not chunk:
-                    break
-                body.extend(chunk)
-                if len(body) > 16384:
-                    raise ValueError('model_settings_response_limit')
-        sys.stdout.buffer.write(body); return
-    if mode != 'serve':
-        raise ValueError('model_settings_mode_invalid')
-    ROOT.mkdir(parents=True, mode=0o700, exist_ok=True)
-    guard = (ROOT / 'agent.lock').open('a')
-    fcntl.flock(guard, fcntl.LOCK_EX | fcntl.LOCK_NB)
-    service = SettingsService()
-    class Handler(socketserver.StreamRequestHandler):
-        def handle(self):
-            self.request.settimeout(50)
-            try:
-                raw = self.rfile.readline(4097)
-                if len(raw) > 4096:
-                    raise ValueError('model_settings_request_limit')
-                value = service.dispatch(json.loads(raw))
-            except Exception as exc:
-                reason = str(exc)
-                allowed = reason.startswith(('model_settings_', 'remote_login_', 'remote_session_', 'invalid_model_', 'invalid_operation', 'operation_id_conflict')) and re.fullmatch(r'[a-z_]{1,90}', reason)
-                value = {'ok': False, 'error': reason if allowed else 'model_settings_unavailable'}
-            self.wfile.write(json.dumps(value).encode() + b'\n')
-    class Server(socketserver.ThreadingUnixStreamServer):
-        daemon_threads = True
-    SOCKET.unlink(missing_ok=True)
-    with Server(str(SOCKET), Handler) as server:
-        SOCKET.chmod(0o600); server.serve_forever()
+    mode=sys.argv[1] if len(sys.argv)==2 else ''
+    if mode=='rpc':return ipc_stdio(SOCKET,max_request=4096,timeout=50,limit=16384)
+    if mode!='serve':raise ValueError('invalid_service_mode')
+    secure_dir(ROOT)
+    guard=(ROOT/'agent.lock').open('a+')
+    fcntl.flock(guard,fcntl.LOCK_EX|fcntl.LOCK_NB)
+    service=SettingsService()
+    def handle(data):
+        return service.dispatch(data)
+    with RPCServer(SOCKET,handle,max_request=4096,timeout=50) as listener:listener.serve_forever()
 
-
-if __name__ == '__main__':
-    main()
+if __name__=='__main__':main()

@@ -25,7 +25,7 @@ def audit():
         if p.name.endswith(('.key','.pem','.sqlite','.local.json','.log')) or p.name in ('.env','access.key','.credentials.json'):
             errors.append((str(p.relative_to(ROOT)),'private_runtime_file'));continue
         count+=1
-        try:text=p.read_text()
+        try:text=p.read_text(encoding='utf-8')
         except UnicodeDecodeError:errors.append((str(p.relative_to(ROOT)),'unexpected_binary'));continue
         if p.name==Path(__file__).name:continue
         for name,pat in PATTERNS.items():

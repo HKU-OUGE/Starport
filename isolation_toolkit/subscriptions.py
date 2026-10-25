@@ -123,7 +123,7 @@ class Subscriptions:
         self.cache = None
 
     def write(self, path, data):
-        t = path.with_suffix('.tmp'); t.write_text(json.dumps(data, ensure_ascii=False)); t.chmod(0o600); t.replace(path)
+        t = path.with_suffix('.tmp'); t.write_text(json.dumps(data, ensure_ascii=False), encoding='utf-8'); t.chmod(0o600); t.replace(path)
 
     def ssh(self, command, data=None, timeout=20):
         profile = self.config.get('router')
@@ -133,6 +133,9 @@ class Subscriptions:
         return p.stdout
 
     def current_config(self):
+        if self.config.get('router',{}).get('executor_ssh'):
+            from .router_remote import call
+            return call(self.config,{'action':'current'})['config']
         return yaml.safe_load(self.ssh('cat /etc/mm-proxy/config.yaml'))
 
     def snapshot(self):
@@ -140,22 +143,23 @@ class Subscriptions:
         with self.lock:
             files = list(self.folder.glob('source-*.json'))
             for p in files:
-                d = json.loads(p.read_text()); result['sources'].append({**{k:d[k] for k in ('id','name','count','updated_at')}, 'refreshable': bool(d.get('url'))})
+                d = json.loads(p.read_text(encoding='utf-8')); result['sources'].append({**{k:d[k] for k in ('id','name','count','updated_at')}, 'refreshable': bool(d.get('url'))})
                 result['nodes'].extend({'id': n['_id'], 'name': n['name'], 'type': n.get('type'), 'supported': n['_supported'], 'source': d['id']} for n in d['nodes'])
         try:
             if not self.cache or time.monotonic()-self.cache[0]>15:
                 d=self.current_config(); g=d['proxy-groups'][0]
                 self.cache=(time.monotonic(),{'available':True,'mode':g['type'],'nodes':g['proxies'],'selected':None})
                 cmd="s=$(cat /etc/mm-proxy/controller.secret); printf '%s\\r\\n' 'GET /proxies HTTP/1.0' 'Host: 127.0.0.1' \"Authorization: Bearer $s\" 'Connection: close' '' | nc 127.0.0.1 9090"
-                raw=self.ssh(cmd).decode().replace('\r\n','\n').split('\n\n',1)[1]
-                self.cache[1]['selected']=json.loads(raw)['proxies'][g['name']].get('now')
+                if not self.config.get('router',{}).get('executor_ssh'):
+                    raw=self.ssh(cmd).decode().replace('\r\n','\n').split('\n\n',1)[1]
+                    self.cache[1]['selected']=json.loads(raw)['proxies'][g['name']].get('now')
             result['current']=self.cache[1]
         except Exception: pass
         result['plans'] = []
         for p in sorted(self.folder.glob('plan-*.json'), key=lambda x:x.stat().st_mtime, reverse=True)[:5]:
-            d=json.loads(p.read_text()); report=self.folder/f'apply-{d["id"]}.json'
+            d=json.loads(p.read_text(encoding='utf-8')); report=self.folder/f'apply-{d["id"]}.json'
             result['plans'].append({'id':d['id'],'created_at':d['created_at'],'names':d['names'],
-                                   'result':json.loads(report.read_text()) if report.exists() else None,
+                                   'result':json.loads(report.read_text(encoding='utf-8')) if report.exists() else None,
                                    'command':f'./bin/starport apply-exit {d["id"]}'})
         return result
 
@@ -172,7 +176,7 @@ class Subscriptions:
 
     def refresh(self, sid):
         if not re.fullmatch('[a-f0-9]{32}',sid or ''): raise ValueError('invalid_subscription')
-        d=json.loads((self.folder/f'source-{sid}.json').read_text())
+        d=json.loads((self.folder/f'source-{sid}.json').read_text(encoding='utf-8'))
         if not d.get('url'): raise ValueError('pasted_subscription_has_no_url')
         return self.import_nodes(d,sid)
 
@@ -180,7 +184,7 @@ class Subscriptions:
         ids=data.get('nodes'); mode=data.get('mode')
         # Existing endpoint guard requires three labelled slots, retained as-is.
         if not isinstance(ids,list) or len(ids)!=3 or len(set(ids))!=3 or mode not in ('fallback','select'): raise ValueError('choose_three_nodes')
-        nodes={n['_id']:n for p in self.folder.glob('source-*.json') for n in json.loads(p.read_text())['nodes']}
+        nodes={n['_id']:n for p in self.folder.glob('source-*.json') for n in json.loads(p.read_text(encoding='utf-8'))['nodes']}
         selected=[]
         for id in ids:
             if id not in nodes or not nodes[id]['_supported']: raise ValueError('unsupported_node')
@@ -208,7 +212,7 @@ class Subscriptions:
 
     def apply(self, pid):
         if not re.fullmatch('[a-f0-9]{32}',pid or ''): raise ValueError('invalid_plan')
-        plan=json.loads((self.folder/f'plan-{pid}.json').read_text())
+        plan=json.loads((self.folder/f'plan-{pid}.json').read_text(encoding='utf-8'))
         if time.time()-plan['created_at']>1800: raise ValueError('plan_expired')
         current=self.current_config()
         if current==plan['candidate']:
@@ -218,4 +222,4 @@ class Subscriptions:
         if hashlib.sha256(json.dumps(current,sort_keys=True).encode()).hexdigest()!=plan['base_sha256']: raise ValueError('router_changed_preview_again')
         # Privileged network updates require an explicit local desktop approval,
         # never a root password or reusable elevated capability in the browser.
-        return {'ok':False,'requires_local_admin':True,'command':f'./bin/starport apply-exit {pid}'}
+        return {'ok':False,'requires_local_admin':True,'command':f'python starport.py apply-exit {pid}'}

@@ -1,6 +1,7 @@
+from bootstrap import owned, secure_dir
 """Bounded read-only background synchronization, independent of browser lifetime."""
 from pathlib import Path
-import fcntl
+from bootstrap import fcntl
 import hashlib
 import json
 import os
@@ -48,9 +49,9 @@ class SnapshotStore:
         self.root = Path(root)
         self.max_bytes, self.max_file_bytes, self.max_files, self.ttl = max_bytes, max_file_bytes, max_files, ttl
         self.root.mkdir(mode=0o700, parents=True, exist_ok=True)
-        if self.root.is_symlink() or self.root.stat().st_uid != os.getuid():
+        if self.root.is_symlink() or not owned(self.root.stat()):
             raise ValueError('invalid_snapshot_directory')
-        self.root.chmod(0o700)
+        secure_dir(self.root)
         self.hashes = {}
 
     def path(self, key):
@@ -65,7 +66,7 @@ class SnapshotStore:
                 continue
             try:
                 st = p.lstat()
-                if stat.S_ISREG(st.st_mode) and st.st_uid == os.getuid():
+                if stat.S_ISREG(st.st_mode) and owned(st):
                     result.append((p, st))
             except FileNotFoundError:
                 pass

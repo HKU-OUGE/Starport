@@ -1,10 +1,11 @@
+from bootstrap import fcntl
 """One-shot, read-only artifact history download in the native user session.
 
 Uses the existing controller for authentication. No credential is serialized.
 It does not start, send messages to, stop or resume any Claude session.
 """
 from pathlib import Path
-import datetime,fcntl,json,os,re,sys,time
+import datetime,json,os,re,sys,time
 os.umask(0o077)
 BASE=Path.home()/'.local/share/starship';sys.path.insert(0,str(BASE))
 from remote_control import Controller
@@ -34,7 +35,7 @@ def main(job_id=None):
   try:
    controller.get(sid)
    old_path=CACHE/(sid+'.json')
-   old=json.loads(old_path.read_text()) if old_path.exists() and not old_path.is_symlink() else {}
+   old=json.loads(old_path.read_text(encoding='utf-8')) if old_path.exists() and not old_path.is_symlink() else {}
    previous=int(old.get('last_sequence',0)) if old.get('history_complete') else 0
    events={};cursor=None;seen=set();complete=False
    for page in range(30):

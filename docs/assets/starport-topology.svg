@@ -21,23 +21,23 @@
   <text x="157" y="359" text-anchor="middle" font-size="19">VPN / HTTPS</text>
   <text x="157" y="388" text-anchor="middle" class="small">Access + Tunnel（可选）</text>
   <rect x="346" y="127" width="435" height="400" rx="16" fill="#102237" stroke="#e6b77a" stroke-opacity=".65"/>
-  <text x="366" y="159" class="label">中继电脑 · Linux</text>
+  <text x="366" y="159" class="label">Linux · macOS · Windows</text>
   <rect x="366" y="190" width="395" height="120" rx="12" class="box"/>
   <text x="388" y="226" class="title">Starport</text>
-  <text x="388" y="257" class="label">会话控制台 · 后台同步 · 管理面板</text>
+  <text x="388" y="257" class="label">会话 · 附件 · 后台同步 · 管理面板</text>
   <text x="388" y="286" class="small">固定接口 / 访问认证 / 独立运行配置</text>
   <path d="M262 371H320V263H366" class="link"/>
   <rect x="366" y="383" width="395" height="115" rx="12" class="box"/>
-  <text x="388" y="418" font-size="21">软路由 + 选定代理</text>
+  <text x="388" y="418" font-size="21">OpenWrt / Linux 路由虚拟机</text>
   <text x="388" y="447" class="label">设备及任务出口 · 代理失效即断网</text>
   <text x="388" y="477" class="small">复用既有部署；管理配置不传给客户端</text>
   <path d="M565 310V380" fill="none" stroke="#83cbd0" stroke-width="1.5" stroke-dasharray="5 5"/>
   <text x="580" y="352" class="small">配置与状态</text>
   <rect x="845" y="127" width="323" height="195" rx="16" fill="#102237" stroke="#83cbd0"/>
-  <text x="866" y="159" class="label">受控设备 · macOS</text>
+  <text x="866" y="159" class="label">Linux · macOS · Windows</text>
   <text x="866" y="205" class="title">Starship</text>
   <text x="866" y="239" class="label">Claude Desktop / Code</text>
-  <text x="866" y="271" class="small">设备端凭证 · 会话与文件接口</text>
+  <text x="866" y="271" class="small">Claude Code · 会话与附件接口</text>
   <path d="M762 225H842" class="link"/>
   <text x="802" y="203" text-anchor="middle" class="small">SSH RPC</text>
   <rect x="845" y="353" width="323" height="145" rx="16" class="box"/>

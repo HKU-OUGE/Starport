@@ -1,7 +1,6 @@
 """Register Starship on macOS without replacing an active session service."""
 from pathlib import Path
 import argparse
-import fcntl
 import json
 import os
 import platform
@@ -11,6 +10,10 @@ import shutil
 import subprocess
 import sys
 
+REPO=Path(__file__).resolve().parents[1]
+sys.path.insert(0,str(REPO))
+from starport_common.runtime import fcntl,secure_dir,WINDOWS
+from starport_common import services
 SOURCE = Path(__file__).resolve().parent / 'starship'
 ROLE = 'io.starport.starship'
 
@@ -46,20 +49,21 @@ def check_inactive(root):
     for name in locks:
         path = state / name
         if path.exists():
-            with path.open('r') as stream:
+            with path.open('r+') as stream:
                 try:
                     fcntl.flock(stream, fcntl.LOCK_EX | fcntl.LOCK_NB)
                 except BlockingIOError:
                     raise ValueError('Starship is running. Finish managed work and stop its agents before updating.') from None
     for path in state.glob('*.json'):
         if len(path.stem) == 36:
-            value = json.loads(path.read_text())
+            value = json.loads(path.read_text(encoding='utf-8'))
             if value.get('status') in ('running', 'starting', 'waiting_approval'):
                 raise ValueError('An unfinished managed session must be reconciled before updating Starship.')
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(description='Install Starship on macOS')
+    parser = argparse.ArgumentParser(description='Install Starship on Linux, macOS or Windows')
+    parser.add_argument('--platform',choices=('Linux','Darwin','Windows'),help='Plan generation only')
     parser.add_argument('--check', action='store_true')
     parser.add_argument('--plan', action='store_true')
     parser.add_argument('--yes', action='store_true')
@@ -67,10 +71,14 @@ def main(argv=None):
     args = parser.parse_args(argv)
     os.umask(0o077)
     home = Path.home(); root, units = installation(home, Path(sys.executable))
+    system=args.platform or platform.system()
+    jobs=(('starship','client.py',[],None),('starship-activity','activity_observer.py',['serve'],None),('starship-model-settings','model_settings.py',['serve'],None),('starship-auth','session_auth_check.py',[],300))
     if args.plan:
-        print(json.dumps({'role': 'Starship', 'agents': units}, indent=2)); return
-    if platform.system() != 'Darwin' or sys.version_info < (3, 10):
-        parser.error('Starship requires macOS and Python 3.10+. Use --plan to inspect on another platform.')
+        definitions=dict(services.definition(name,[sys.executable,root/script,*arguments],root,system) for name,script,arguments,interval in jobs)
+        print(json.dumps({'role':'Starship','services':definitions},indent=2));return
+    if args.platform:parser.error('--platform is only valid with --plan')
+    if system not in ('Linux','Darwin','Windows') or sys.version_info < (3, 10):
+        parser.error('Starship requires Python 3.10+ on Linux, macOS or Windows. Use --plan to inspect on another platform.')
     sys.path.insert(0, str(SOURCE))
     from client import cli
     try:
@@ -78,41 +86,32 @@ def main(argv=None):
         check_inactive(root)
     except ValueError as exc:
         parser.error(str(exc))
-    domain = 'gui/' + str(os.getuid())
-    if not args.check:
-        for filename in units:
-            if subprocess.run(['/bin/launchctl', 'print', domain + '/' + filename[:-6]], capture_output=True).returncode == 0:
-                parser.error('Starship agents are loaded. Unload them after managed work finishes before updating.')
     if args.check:
         print('Starship prerequisites available. Enable Remote Login and authenticate Claude on this device.'); return
     if not args.yes and input('Install Starship background services? [y/N] ').lower() != 'y':
         return
-    root.mkdir(parents=True, exist_ok=True, mode=0o700)
+    secure_dir(root)
     if root.is_symlink():
         parser.error('Linked installation directory is not supported')
-    (root / 'state').mkdir(exist_ok=True, mode=0o700)
+    secure_dir(root/'state')
+    shutil.copytree(REPO/'starport_common',root/'starport_common',dirs_exist_ok=True,ignore=shutil.ignore_patterns('__pycache__','*.pyc'))
     for source in SOURCE.glob('*.py'):
         destination = root / source.name
         if destination.is_symlink():
             parser.error('Linked installation file is not supported')
         shutil.copyfile(source, destination); destination.chmod(0o600)
-    launcher = root / 'rpc'
-    if launcher.is_symlink():
-        parser.error('Linked launcher is not supported')
-    launcher.write_text('#!/bin/sh\nexec ' + shlex.quote(sys.executable) + ' ' + shlex.quote(str(root / 'gateway.py')) + ' "$@"\n')
+    launcher=root/('rpc.cmd' if WINDOWS else 'rpc')
+    if launcher.is_symlink():parser.error('Linked launcher is not supported')
+    if WINDOWS:
+        launcher.write_text('@echo off\r\n"'+sys.executable+'" "'+str(root/'gateway.py')+'" %*\r\n',encoding='utf-8')
+    else:
+        launcher.write_text('#!/bin/sh\nexec '+shlex.quote(sys.executable)+' '+shlex.quote(str(root/'gateway.py'))+' "$@"\n',encoding='utf-8')
     launcher.chmod(0o700)
-    folder = home / 'Library/LaunchAgents'; folder.mkdir(parents=True, exist_ok=True)
-    for name, value in units.items():
-        path = folder / name
-        if path.is_symlink():
-            parser.error('Linked LaunchAgent is not supported')
-        if path.exists():
-            shutil.copy2(path, path.with_suffix('.plist.previous'))
-        path.write_bytes(plistlib.dumps(value)); path.chmod(0o600)
-        if not args.no_start:
-            subprocess.run(['/bin/launchctl', 'bootstrap', domain, str(path)], check=True)
+    definitions=dict(services.prepare(name,[sys.executable,root/script,*arguments],root,root/'state',sys.executable,interval=interval)
+                     for name,script,arguments,interval in jobs)
+    services.register(definitions,args.no_start)
     print('Starship installed. Use ./bin/starship status and pair its SSH key with Starport.')
-    print('After a reboot, log in to macOS once. Locking the screen does not unload the agents.')
+    print('Services run in your user session. After a reboot, sign in once; locking the screen preserves them.')
 
 
 if __name__ == '__main__':

@@ -1,3 +1,4 @@
+from starport_common.runtime import config_home,state_home
 from pathlib import Path
 import ipaddress
 import json
@@ -7,19 +8,19 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def config_dir():
-    root = Path(os.environ.get('XDG_CONFIG_HOME', Path.home() / '.config'))
+    root = config_home()
     current = root / 'starport'
     previous = root / 'claude-isolation'
     return current if (current / 'config.json').exists() or not (previous / 'config.json').exists() else previous
 
 
 def state_dir():
-    return Path(os.environ.get('XDG_STATE_HOME', Path.home() / '.local/state')) / 'starport/panel'
+    return state_home() / 'starport/panel'
 
 
 def load(path=None):
     p = Path(path) if path else config_dir() / 'config.json'
-    d = json.loads(p.read_text())
+    d = json.loads(p.read_text(encoding='utf-8'))
     for key in ('legacy_root', 'access_key_file', 'state_dir'):
         if key == 'legacy_root' and not d.get(key):
             d[key] = None

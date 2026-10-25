@@ -30,10 +30,10 @@ class DocumentTests(unittest.TestCase):
     def test_exact_bridge_mapping_not_title_and_ambiguity_rejected(self):
         with tempfile.TemporaryDirectory() as td:
             home=Path(td);project=home/'project';project.mkdir()
-            manifests=home/'Library/Application Support/Claude/claude-code-sessions/account/org';manifests.mkdir(parents=True)
+            manifests=reader.desktop_home(home)/'claude-code-sessions/account/org';manifests.mkdir(parents=True)
             index={LID:{'cwd':str(project)}}
             path=manifests/('local_'+LID+'.json')
-            path.write_text(json.dumps({'title':'Same title','cliSessionId':LID,'cwd':str(project),'bridgeSessionIds':['session_'+SID[4:]]}))
+            path.write_text(json.dumps({'title':'Same title','cliSessionId':LID,'cwd':str(project),'bridgeSessionIds':['session_'+SID[4:]]}), encoding='utf-8')
             self.assertEqual(reader.resolve_project(SID,{},index,home),project)
             index[LID]['cwd']=str(project/'results/reports')
             self.assertEqual(reader.resolve_project(SID,{},index,home),project)
@@ -42,7 +42,7 @@ class DocumentTests(unittest.TestCase):
             index[LID]['cwd']=str(project)
             self.assertIsNone(reader.resolve_project('cse_'+'B'*24,{'title':'Same title'},index,home))
             other='11111111-1111-4111-8111-111111111111';index[other]={'cwd':str(project)}
-            (manifests/('local_'+other+'.json')).write_text(json.dumps({'cliSessionId':other,'cwd':str(project),'bridgeSessionIds':[SID]}))
+            (manifests/('local_'+other+'.json')).write_text(json.dumps({'cliSessionId':other,'cwd':str(project),'bridgeSessionIds':[SID]}), encoding='utf-8')
             with self.assertRaisesRegex(ValueError,'ambiguous'):reader.resolve_project(SID,{},index,home)
 
     def test_download_range_hash_and_project_session_boundaries(self):

@@ -4,18 +4,20 @@
 
 | 位置 | 服务 | 作用 |
 | --- | --- | --- |
-| Linux 用户服务 | `starport-console.service` | 会话控制台、缓存和成品读取 |
-| Linux 用户服务 | `starport-panel.service` | 服务、软路由与算力管理面板 |
-| Mac LaunchAgent | `io.starport.starship` | 会话与后台执行 |
-| Mac LaunchAgent | `io.starport.starship-activity` | 实时处理状态 |
-| Mac LaunchAgent | `io.starport.starship-model-settings` | 模型与 effort 回执 |
-| Mac LaunchAgent | `io.starport.starship-auth` | 原生登录状态维护 |
+| Linux systemd | `starport-console.service` | 会话控制台、缓存和成品读取 |
+| Linux systemd | `starport-panel.service` | 服务、软路由与算力管理面板 |
+| macOS launchd | `io.starport.starship` | 会话与后台执行 |
+| macOS launchd | `io.starport.starship-activity` | 实时处理状态 |
+| macOS launchd | `io.starport.starship-model-settings` | 模型与 effort 回执 |
+| macOS launchd | `io.starport.starship-auth` | 原生登录状态维护 |
 
 ```sh
 ./bin/starport services
 systemctl --user status starport-console.service starport-panel.service
 ./bin/starship status  # 在客户端执行
 ```
+
+Windows 使用 `Starport` 任务文件夹中的同名用户任务。后台监督进程统一负责日志与重试，Windows 子进程加入专用 Job Object，停止该服务时一并回收其子进程。
 
 ## 既有服务适配
 

@@ -4,7 +4,7 @@ import os
 sys.dont_write_bytecode = True
 from pathlib import Path
 root = Path(__file__).resolve().parents[1]
-python = root / 'server/.venv/bin/python'
+python = root / ('server/.venv/Scripts/python.exe' if os.name=='nt' else 'server/.venv/bin/python')
 if python.is_file() and (python.parent.parent / '.starport-ready').exists() and Path(sys.prefix) != python.parent.parent:
     os.execv(str(python), [str(python), str(Path(__file__).resolve()), *sys.argv[1:]])
 if len(sys.argv) > 1 and sys.argv[1] == 'install':

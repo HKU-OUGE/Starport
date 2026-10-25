@@ -94,7 +94,7 @@ class HTTPTests(unittest.TestCase):
     def setUpClass(cls):
         cls.tmp = tempfile.TemporaryDirectory()
         root = Path(cls.tmp.name); (root / 'web/dist/assets').mkdir(parents=True)
-        (root / 'web/dist/index.html').write_text('<html>console</html>')
+        (root / 'web/dist/index.html').write_text('<html>console</html>', encoding='utf-8')
         cls.asset = b'const example = "sample content";\n' * 3000
         (root / 'web/dist/assets/example-abcdefgh.js').write_bytes(cls.asset)
         cls.base = patch.object(server, 'BASE', root); cls.base.start()

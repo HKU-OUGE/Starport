@@ -1,7 +1,7 @@
 """Local, explicitly approved exit-plan application. No browser-side root API."""
 from pathlib import Path
 import argparse
-import fcntl
+from starport_common.runtime import fcntl
 import hashlib
 import ipaddress
 import json

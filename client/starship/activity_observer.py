@@ -1,6 +1,7 @@
+from bootstrap import RPCServer,ipc_stdio,secure_dir
 """Read-only activity observer. No message content or account material is returned."""
 from pathlib import Path
-import fcntl
+from bootstrap import fcntl
 import hashlib
 import json
 import os
@@ -18,7 +19,7 @@ from remote_control import Controller
 from artifact_reader import native_rpc
 
 BASE = Path.home() / '.local/share/starship'
-SOCKET = BASE / 'state/activity.sock'
+SOCKET = BASE / 'state/activity.rpc'
 SID = re.compile(r'cse_[A-Za-z0-9]{16,64}')
 
 
@@ -174,69 +175,17 @@ class Observer:
             return {'ok': True, 'session_id': sid, 'activity': {**watch.value.snapshot(), 'source': watch.source}}
 
 
-def install():
-    label = 'io.starport.starship-activity'
-    path = Path.home() / 'Library/LaunchAgents' / (label + '.plist')
-    if path.exists():
-        raise ValueError('activity_agent_already_installed')
-    path.parent.mkdir(parents=True, exist_ok=True)
-    value = {'Label': label, 'ProgramArguments': [sys.executable, str(BASE / 'activity_observer.py'), 'serve'],
-             'RunAtLoad': True, 'KeepAlive': {'SuccessfulExit': False}, 'ThrottleInterval': 5,
-             'StandardOutPath': str(BASE / 'state/activity-agent.log'),
-             'StandardErrorPath': str(BASE / 'state/activity-agent.log')}
-    path.write_bytes(plistlib.dumps(value));path.chmod(0o600)
-    subprocess.run(['/bin/launchctl', 'bootstrap', 'gui/' + str(os.getuid()), str(path)], check=True)
-    print(json.dumps({'ok': True, 'installed': True}))
-
-
 def main():
     os.umask(0o077)
-    mode = sys.argv[1] if len(sys.argv) == 2 else ''
-    if mode == 'install':
-        install(); return
-    if mode == 'rpc':
-        raw = sys.stdin.buffer.readline(4097)
-        if len(raw) > 4096:
-            raise ValueError('activity_request_limit')
-        with socket.socket(socket.AF_UNIX) as connection:
-            connection.settimeout(5);connection.connect(str(SOCKET))
-            connection.sendall(raw.rstrip(b'\n') + b'\n');connection.shutdown(socket.SHUT_WR)
-            body = bytearray()
-            while True:
-                chunk = connection.recv(4096)
-                if not chunk:
-                    break
-                body.extend(chunk)
-                if len(body) > 16384:
-                    raise ValueError('activity_response_limit')
-        sys.stdout.buffer.write(body);return
-    if mode != 'serve':
-        raise ValueError('activity_mode_invalid')
-    (BASE / 'state').mkdir(mode=0o700, exist_ok=True)
-    guard = (BASE / 'state/activity.lock').open('a')
-    fcntl.flock(guard, fcntl.LOCK_EX | fcntl.LOCK_NB)
-    observer = Observer()
-    class Handler(socketserver.StreamRequestHandler):
-        def handle(self):
-            self.connection.settimeout(5)
-            try:
-                raw = self.rfile.readline(4097)
-                if len(raw) > 4096:
-                    raise ValueError('activity_request_limit')
-                result = observer.read(json.loads(raw))
-            except Exception:
-                result = {'ok': False, 'error': 'activity_unavailable'}
-            self.wfile.write(json.dumps(result).encode() + b'\n')
-    class Server(socketserver.ThreadingUnixStreamServer):
-        daemon_threads = True
-    SOCKET.unlink(missing_ok=True)
-    with Server(str(SOCKET), Handler) as server:
-        SOCKET.chmod(0o600);server.serve_forever()
+    mode=sys.argv[1] if len(sys.argv)==2 else ''
+    if mode=='rpc':return ipc_stdio(SOCKET,max_request=4096,timeout=5,limit=16384)
+    if mode!='serve':raise ValueError('invalid_service_mode')
+    secure_dir(BASE/'state')
+    guard=(BASE/'state/activity.lock').open('a+')
+    fcntl.flock(guard,fcntl.LOCK_EX|fcntl.LOCK_NB)
+    observer=Observer()
+    def handle(data):
+        return observer.read(data)
+    with RPCServer(SOCKET,handle,max_request=4096,timeout=5) as listener:listener.serve_forever()
 
-
-if __name__ == '__main__':
-    try:
-        main()
-    except Exception:
-        print(json.dumps({'ok': False, 'error': 'activity_unavailable'}))
-        raise SystemExit(1)
+if __name__=='__main__':main()

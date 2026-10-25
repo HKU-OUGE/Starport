@@ -86,7 +86,7 @@ class ArtifactReaderTests(unittest.TestCase):
     def test_history_reader_ignores_api_request_duplicates(self):
         with tempfile.TemporaryDirectory() as tmp:
             p=Path(tmp)/'session.jsonl'
-            p.write_text('\n'.join(json.dumps({'type':kind,'message':{'content':[{'type':'text','text':kind}]}}) for kind in ['assistant','api-request-blob','user']))
+            p.write_text('\n'.join(json.dumps({'type':kind,'message':{'content':[{'type':'text','text':kind}]}}) for kind in ['assistant','api-request-blob','user']), encoding='utf-8')
             rows,limited=reader.rows_from(p)
             self.assertEqual(len(rows),2);self.assertFalse(limited)
 
@@ -119,19 +119,19 @@ class ArtifactReaderTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             p=Path(tmp)/'s.jsonl'
             rows=[{'type':'assistant','message':{'content':[{'type':'tool_use','name':'Artifact','id':'t','input':{}}]}}, {'type':'user','message':{'content':[{'type':'tool_result','tool_use_id':'t','content':'result'}]}}, {'type':'assistant','message':{'content':[{'type':'text','text':'unrelated'}]}}]
-            p.write_text('\n'.join(map(json.dumps,rows)))
+            p.write_text('\n'.join(map(json.dumps,rows)), encoding='utf-8')
             result,limited=reader.rows_from(p,True)
             self.assertEqual(len(result),2);self.assertFalse(limited)
 
     def test_original_html_requires_a_matching_publication_and_scoped_file(self):
         aid='a'*20
         with tempfile.TemporaryDirectory() as d:
-            root=Path(d);file=root/'index.html';file.write_text('<html>Example</html>')
+            root=Path(d);file=root/'index.html';file.write_text('<html>Example</html>', encoding='utf-8')
             rows=[('1',[{'type':'tool_use','id':'t','name':'Artifact','input':{'file_path':str(file)}},{'type':'tool_result','tool_use_id':'t','content':'Published '+str(file)+' at https://claude.ai/artifact/'+aid+' (Version 1)'}],None)]
             self.assertIsNone(reader.published_html(rows,aid))
             value=reader.published_html(rows,aid,(root,));self.assertEqual(value['sha256'],hashlib.sha256(file.read_bytes()).hexdigest())
             self.assertIsNone(reader.published_html(rows,'b'*20,(root,)))
-            file.unlink();file.symlink_to(root/'other.html');(root/'other.html').write_text('outside')
+            file.unlink();file.symlink_to(root/'other.html');(root/'other.html').write_text('outside', encoding='utf-8')
             self.assertIsNone(reader.published_html(rows,aid,(root,)))
 
 

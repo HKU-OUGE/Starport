@@ -2,6 +2,7 @@
 import re
 
 SPECIAL = {
+    'starship.service': ('claude', 'Starship 客户端', '设备会话接口。'),
     'starport-console.service': ('claude', 'Starport 会话控制台', '消息、状态、成品及模型设置。'),
     'starport-panel.service': ('management', 'Starport 管理面板', '设备、服务、网络和算力入口。'),
     'starport-tunnel.service': ('network', 'Starport HTTPS 入口', '可选的受保护公网入口。'),
@@ -24,7 +25,7 @@ ACTION_NAMES = {'start': '启动', 'stop': '停止', 'restart': '重启', 'enabl
 
 
 def in_scope(name):
-    return bool(re.fullmatch(r'(?:starport-[A-Za-z0-9_-]+|gpu-[A-Za-z0-9_-]+|mac-mini-[A-Za-z0-9_-]+|macmini-router|mm-isolation|mac-claude-console|claude-isolation-panel|zerotier-one)\.(?:service|timer)', name))
+    return bool(re.fullmatch(r'(?:starship(?:-[A-Za-z0-9_-]+)?|starport-[A-Za-z0-9_-]+|gpu-[A-Za-z0-9_-]+|mac-mini-[A-Za-z0-9_-]+|macmini-router|mm-isolation|mac-claude-console|claude-isolation-panel|zerotier-one)\.(?:service|timer)', name))
 
 
 def describe(name):

@@ -1,0 +1,3 @@
+{
+  "executor_ssh": ["ssh", "-T", "-o", "BatchMode=yes", "-o", "StrictHostKeyChecking=yes", "-o", "ForwardAgent=no", "-o", "SendEnv=-*", "starport-router"]
+}

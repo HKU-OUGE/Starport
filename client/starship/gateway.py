@@ -2,6 +2,8 @@
 from pathlib import Path
 import os
 import sys
+from bootstrap import WINDOWS
+from starport_common.transport import command as wire_command
 
 COMMAND = '"$HOME/.local/share/starship/rpc" '
 ENDPOINTS = {
@@ -16,9 +18,10 @@ ENDPOINTS = {
 
 def resolve(argv, original=None):
     if original is not None:
-        if argv or not original.startswith(COMMAND):
+        matches=[name for name in ENDPOINTS if original in (wire_command(name,'posix'),wire_command(name,'windows'))]
+        if argv or len(matches)!=1:
             raise ValueError('ssh_command_blocked')
-        argv = [original[len(COMMAND):]]
+        argv = matches
     if len(argv) != 1 or argv[0] not in ENDPOINTS:
         raise ValueError('ssh_command_blocked')
     return ENDPOINTS[argv[0]]

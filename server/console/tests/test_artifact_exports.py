@@ -7,7 +7,7 @@ class BundleTests(unittest.TestCase):
    root=Path(td);eid='a'*32;folder=root/'artifact-exports'/eid;folder.mkdir(parents=True)
    raw=b'zip-test';(folder/'artifacts.zip').write_bytes(raw)
    manifest={'id':eid,'bytes':len(raw),'sha256':hashlib.sha256(raw).hexdigest(),'html_count':2}
-   (folder/'manifest.json').write_text(json.dumps(manifest));(folder.parent/'latest.json').write_text(json.dumps({'id':eid}))
+   (folder/'manifest.json').write_text(json.dumps(manifest), encoding='utf-8');(folder.parent/'latest.json').write_text(json.dumps({'id':eid}), encoding='utf-8')
    self.assertEqual(latest_export(root)['html_count'],2);self.assertEqual(export_bundle(root,eid),raw)
    (folder/'artifacts.zip').write_bytes(b'changed')
    with self.assertRaisesRegex(ValueError,'integrity'):export_bundle(root,eid)

@@ -1,3 +1,4 @@
+import sys
 """Account-scoped controller for existing Remote Control sessions.
 
 Native account material stays on this machine. The caller supplies reviewed
@@ -61,7 +62,7 @@ class Controller:
         path = BASE / 'remote-control-bindings.json'
         if not path.is_file() or path.is_symlink():
             return {}
-        value = json.loads(path.read_text())
+        value = json.loads(path.read_text(encoding='utf-8'))
         if not isinstance(value, dict) or len(value) > 30:
             raise ValueError('remote_binding_invalid')
         local = self.local_index()
@@ -73,18 +74,19 @@ class Controller:
             if self.cached_auth and time.monotonic() - self.auth_at < 20:
                 return self.cached_auth
             candidates = []
-            result = subprocess.run(['/usr/bin/security', 'find-generic-password',
-                                     '-s', 'Claude Code-credentials', '-w'],
-                                    capture_output=True, timeout=8)
-            if result.returncode == 0:
-                try:
-                    candidates.append(json.loads(result.stdout).get('claudeAiOauth', {}))
-                except ValueError:
-                    pass
+            if sys.platform == 'darwin':
+                result = subprocess.run(['/usr/bin/security', 'find-generic-password',
+                                         '-s', 'Claude Code-credentials', '-w'],
+                                        capture_output=True, timeout=8)
+                if result.returncode == 0:
+                    try:
+                        candidates.append(json.loads(result.stdout).get('claudeAiOauth', {}))
+                    except ValueError:
+                        pass
             path = Path.home() / '.claude/.credentials.json'
             if path.is_file() and not path.is_symlink():
                 try:
-                    candidates.append(json.loads(path.read_text()).get('claudeAiOauth', {}))
+                    candidates.append(json.loads(path.read_text(encoding='utf-8')).get('claudeAiOauth', {}))
                 except ValueError:
                     pass
             candidates = [x for x in candidates if isinstance(x, dict) and x.get('accessToken')]
@@ -93,7 +95,7 @@ class Controller:
             item = max(candidates, key=lambda x: x.get('expiresAt', 0))
             if item.get('expiresAt', 0) <= time.time() * 1000:
                 raise ValueError('remote_login_expired')
-            account = json.loads((Path.home() / '.claude.json').read_text()).get('oauthAccount', {})
+            account = json.loads((Path.home() / '.claude.json').read_text(encoding='utf-8')).get('oauthAccount', {})
             org = account.get('organizationUuid')
             if not org:
                 raise ValueError('remote_login_required')
@@ -276,9 +278,11 @@ class Controller:
         op = data.get('operation_id', '')
         if action == 'send':
             text = data.get('message')
-            if not isinstance(text, str) or not 1 <= len(text) <= 24000:
+            ids=data.get('attachments',[])
+            if not isinstance(text, str) or len(text)>24000 or not (text or ids):
                 raise ValueError('invalid_message')
-            return self.post(sid, {'type': 'user', 'message': {'role': 'user', 'content': [{'type': 'text', 'text': text}]}}, op)
+            content=self.attachment_content(sid,ids,text) if ids else [{'type':'text','text':text}]
+            return self.post(sid, {'type': 'user', 'message': {'role': 'user', 'content': content}}, op)
         if action == 'stop':
             return self.post(sid, {'type': 'control_request', 'request_id': 'console-' + op,
                                    'request': {'subtype': 'interrupt'}}, op)

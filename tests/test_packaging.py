@@ -1,7 +1,7 @@
 """Cross-platform installation and transport contracts, with no live services."""
 from pathlib import Path
 import argparse
-import fcntl
+from starport_common.runtime import fcntl
 import importlib.util
 import json
 import os

@@ -1,5 +1,10 @@
+import shutil
+from bootstrap import bounded_process,WINDOWS
+from starport_common.transport import command as remote_command
+from bootstrap import owned, secure_dir
 """Authenticated console. Browser input never becomes a local command."""
 from model_controls import checked_settings
+from attachments import request as attachment_request, identifiers as attachment_ids
 from settings import load as load_settings, state_path, validate as validate_settings
 from collections import defaultdict, deque
 from contextlib import contextmanager
@@ -43,6 +48,7 @@ CACHE_LOCK = threading.RLock()
 CACHE = {}
 HOST, PORT = '127.0.0.1', 18881
 SSH_HOST = 'starship'
+CLIENT_PLATFORM = 'posix'
 MANAGEMENT_URL = ''
 KEY = ''
 MEDIA_SLOTS = threading.BoundedSemaphore(4)
@@ -97,12 +103,13 @@ def database():
 
 
 def ssh_options(data, *, activity=False, document=False, artifact_sync=False):
+    if WINDOWS:return ['-o','ServerAliveInterval=10','-o','ServerAliveCountMax=2']
     runtime = Path(os.environ.get('XDG_RUNTIME_DIR', str(STATE))) / 'starport-ssh'
     runtime.mkdir(mode=0o700, parents=True, exist_ok=True)
-    if runtime.is_symlink() or runtime.stat().st_uid != os.getuid():
+    if runtime.is_symlink() or not owned(runtime.stat()):
         raise ValueError('invalid_transport_directory')
-    runtime.chmod(0o700)
-    group = ('activity' if activity else 'sync' if artifact_sync else 'files' if document or data.get('action') == 'media'
+    secure_dir(runtime)
+    group = ('activity' if activity else 'sync' if artifact_sync else 'files' if document or data.get('action') in ('media','attachment')
              else 'write' if data.get('action') in {'send', 'stop', 'permission', 'create', 'model_settings'} else 'read')
     return ['-o', 'ControlMaster=auto', '-o', 'ControlPersist=300', '-o', 'ControlPath=' + str(runtime / (group + '-%C')),
             '-o', 'ServerAliveInterval=10', '-o', 'ServerAliveCountMax=2']
@@ -113,37 +120,12 @@ def rpc(data, *, artifact=False, artifact_sync=False, document=False, activity=F
     # client addresses, local environment, or local paths are forwarded.
     endpoint = ('settings' if model_settings else 'activity' if activity else 'documents' if document
                 else 'artifact-sync' if artifact_sync else 'artifacts' if artifact else 'session')
-    command = ['/usr/bin/ssh', '-T', '-o', 'BatchMode=yes', '-o', 'ConnectTimeout=8',
+    command = [shutil.which('ssh') or 'ssh', '-T', '-o', 'BatchMode=yes', '-o', 'ConnectTimeout=8',
                '-o', 'StrictHostKeyChecking=yes', '-o', 'ForwardAgent=no', '-o', 'SendEnv=-*',
                *ssh_options(data, activity=activity, document=document, artifact_sync=artifact_sync),
-               SSH_HOST, '"$HOME/.local/share/starship/rpc" ' + endpoint]
-    process = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    output = bytearray()
-    deadline = time.monotonic() + (12 if activity else 70)
-    try:
-        process.stdin.write(json.dumps(data, ensure_ascii=False).encode() + b'\n')
-        process.stdin.close()
-        streams = [process.stdout, process.stderr]
-        while streams:
-            if time.monotonic() >= deadline:
-                raise ValueError('connection_timeout_outcome_unknown')
-            ready, _, _ = select.select(streams, [], [], min(1, deadline - time.monotonic()))
-            for stream in ready:
-                chunk = os.read(stream.fileno(), 65536)
-                if not chunk:
-                    streams.remove(stream)
-                elif stream is process.stdout:
-                    output.extend(chunk)
-                    if len(output) > (16384 if activity else (20 if artifact else 4) * 1024 * 1024):
-                        raise ValueError('remote_response_exceeds_limit')
-        if process.wait(timeout=2):
-            raise ValueError('starship_connection_unavailable')
-    finally:
-        if process.poll() is None:
-            process.kill()
-            process.wait()
-        for stream in [process.stdout, process.stderr]:
-            stream.close()
+               SSH_HOST, remote_command(endpoint,CLIENT_PLATFORM)]
+    output=bounded_process(command,json.dumps(data,ensure_ascii=False).encode()+b'\n',12 if activity else 70,
+                           16384 if activity else (20 if artifact else 4)*1024*1024)
     try:
         value = json.loads(output)
     except ValueError:
@@ -205,7 +187,9 @@ def action_payload(data):
     if action in {'send', 'stop', 'permission'}:
         result = {'action': action, 'session_id': checked_session_id(data.get('session_id'))}
         if action == 'send':
-            result['message'] = checked_text(data.get('message'))
+            ids=attachment_ids(data.get('attachments',[]))
+            result['message'] = '' if ids and not data.get('message') else checked_text(data.get('message'))
+            if ids:result['attachments']=ids
         if action == 'permission':
             if data.get('decision') not in {'allow', 'deny'}:
                 raise ValueError('invalid_decision')
@@ -516,7 +500,7 @@ class Handler(BaseHTTPRequestHandler):
                 self.close_connection = True
                 return self.respond(400, {'error': 'invalid_body'})
             length = int(self.headers.get('Content-Length', '0'))
-            if not 1 <= length <= 128 * 1024 or self.headers.get('Content-Type', '').split(';')[0] != 'application/json':
+            if not 1 <= length <= (512 * 1024 if self.path=='/api/attachments' else 128 * 1024) or self.headers.get('Content-Type', '').split(';')[0] != 'application/json':
                 self.close_connection = True
                 return self.respond(400, {'error': 'invalid_body'})
             data = json.loads(self.rfile.read(length))
@@ -547,7 +531,9 @@ class Handler(BaseHTTPRequestHandler):
         if not identity or not hmac.compare_digest(self.headers.get('X-Console-CSRF', ''), identity['csrf']):
             return self.respond(403, {'error': 'invalid_session'})
         try:
-            if self.path == '/api/artifact-exports/refresh':
+            if self.path == '/api/attachments':
+                result=rpc(attachment_request(data,checked_session_id))
+            elif self.path == '/api/artifact-exports/refresh':
                 if data:
                     raise ValueError('invalid_body')
                 result = {'ok': True, 'refresh': ARTIFACT_REFRESH.start()}
@@ -575,7 +561,7 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def main():
-    global HOST, PORT, KEY, SYNC, SSH_HOST, STATE, ARTIFACT_REFRESH, MANAGEMENT_URL
+    global HOST, PORT, KEY, SYNC, SSH_HOST, STATE, ARTIFACT_REFRESH, MANAGEMENT_URL, CLIENT_PLATFORM
     os.umask(0o077)
     parser = argparse.ArgumentParser()
     parser.add_argument('--config', help='External Starport console configuration')
@@ -588,20 +574,21 @@ def main():
     config.update({k: getattr(args, k) for k in ('host', 'port', 'public_origin', 'tunnel_port') if getattr(args, k) is not None})
     config = validate_settings(config)
     HOST, PORT, SSH_HOST = config['host'], config['port'], config['ssh_host']
+    CLIENT_PLATFORM=config['client_platform']
     MANAGEMENT_URL = config['management_url']
     STATE = Path(config['state_dir'])
     STATE.mkdir(mode=0o700, parents=True, exist_ok=True)
-    if STATE.is_symlink() or STATE.stat().st_uid != os.getuid():
+    if STATE.is_symlink() or not owned(STATE.stat()):
         raise ValueError('invalid_state_directory')
-    STATE.chmod(0o700)
+    secure_dir(STATE)
     ARTIFACT_REFRESH = RefreshManager(STATE, lambda *a, **k: rpc(*a, **k), lambda request: rpc(request, artifact_sync=True), ARTIFACT_READS.invalidate)
     key_file = STATE / 'access.key'
     if key_file.is_symlink():
         raise ValueError('invalid_access_key_file')
     if not key_file.exists():
-        key_file.write_text(secrets.token_urlsafe(24))
+        key_file.write_text(secrets.token_urlsafe(24), encoding='utf-8')
     key_file.chmod(0o600)
-    KEY = key_file.read_text().strip()
+    KEY = key_file.read_text(encoding='utf-8').strip()
     if len(KEY) < 24:
         raise ValueError('access_key_too_short')
     with database() as db:

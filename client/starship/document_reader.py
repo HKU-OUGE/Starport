@@ -1,3 +1,4 @@
+from bootstrap import desktop_home
 """Read registered PDF attachments without restarting the session daemon.
 
 The caller supplies a session ID and opaque file ID, never a path or URL.
@@ -45,7 +46,7 @@ def resolve_project(sid, session, index, home=HOME):
             raise ValueError('document_session_unavailable')
         return Path(saved['cwd'])
     bridge_ids = {sid, 'session_' + sid[4:]}
-    root = home / 'Library/Application Support/Claude/claude-code-sessions'
+    root = desktop_home(home) / 'claude-code-sessions'
     matches = {}
     for count, path in enumerate(root.glob('*/*/local_*.json')):
         if count >= 512:
