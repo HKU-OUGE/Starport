@@ -2,87 +2,76 @@
 
 ![Starport — 连接你的 AI、设备与算力](docs/assets/starport-cover.svg)
 
-[快速开始](#快速开始) · [使用指南](docs/GUIDE.md) · [网络与出口](docs/NETWORK.md) · [安装与迁移](docs/INSTALL.md)
+[安装](docs/INSTALL.md) · [会话控制](docs/CONSOLE.md) · [网络与出口](docs/NETWORK.md) · [服务管理](docs/SERVICES.md)
 
-Starport 将 AI 会话、设备连接、网络出口与计算资源汇聚到一个工作台。查看状态、传输文件、选择节点，让每一项工作有清晰的入口。
+**Starport 是地面站，Starship 是星舰。** 在手机或电脑上接续 Claude 会话，查看任务、文件与设备状态。
+
+| 组件 | 安装位置 | 职责 |
+| --- | --- | --- |
+| **Starport · 服务端** | Linux 中继电脑 | 网页控制台、消息缓存、服务面板、软路由与算力适配 |
+| **Starship · 客户端** | 受控设备，当前支持 macOS | Claude Desktop／Code 会话、实时状态、文件与成品读取 |
+
+## 网络拓扑
+
+![Starport 与 Starship 的管理、计算和网络连接](docs/assets/starport-topology.svg)
+
+浏览器通过 VPN 或受保护的 HTTPS 入口访问 Starport。Starport 通过固定 SSH 接口连接 Starship；设备与训练任务的外网出口由既有软路由控制，代理失效时断网。路由与算力是可选适配，独立于会话控制台安装。
 
 ## 快速开始
 
-先运行只读检测，再运行引导安装：
+在 Linux 安装 **Starport**：
 
 ```sh
-./install.sh --check --legacy-root ../existing-tools
-./install.sh --legacy-root ../existing-tools
+./install.sh server --check
+./install.sh server --ssh-host starship
+./bin/starport urls
+./bin/starport key
 ```
 
-需要 Python 3.10+、PyYAML、Linux systemd、iproute2，以及已有工具包。引导脚本让你选择已有的私有网络接口；留空只开放本机回环。它只注册和启动 `claude-isolation-panel.service`，不会重装软路由、修改隔离规则或重启训练服务。
-
-如果系统缺少 PyYAML：
+在 Mac 安装 **Starship**：
 
 ```sh
-python3 -m venv .venv
-.venv/bin/pip install -r requirements.txt
-.venv/bin/python install.py --legacy-root ../existing-tools
+./install.sh client --check
+./install.sh client
+./bin/starship status
 ```
 
-安装后：
+两端需要 Python 3.10+；服务端还需要 Node.js 22.12+、npm、OpenSSH 和 systemd。Mac 先完成 Claude Code 登录并开启远程登录，服务端按 [SSH 示例](examples/ssh.example.conf) 配对。默认仅开放本机回环；VPN、HTTPS 与旧环境接入见[安装指南](docs/INSTALL.md)。
 
-```sh
-./bin/starport urls      # 实际访问地址
-./bin/starport key       # 仅在本机显示访问码
-./bin/starport status    # 服务、工具、网络与开机启动概况
-```
+## 工作台
 
-如果已有会话控制台的访问码文件满足私有权限要求，自动复用访问码；否则在外部配置目录生成新码。浏览器登录仍独立，访问码不进入 URL。
-
-## 你的工作台
-
-| 模块 | 能力 |
+| 能力 | 内容 |
 | --- | --- |
-| 总览 | 服务数量、异常、GPU 预算与预留、磁盘可用空间、常用入口 |
-| 服务注册 | 系统 / 用户服务、运行状态、自动启动、注册来源、依赖和重试次数 |
-| 软路由 | 网桥、接口、SSH、DNS、代理及守卫检查；可选客户端 HTTPS 探测 |
-| 订阅与节点 | HTTPS 订阅、Clash / Mihomo YAML、节点 URI / Base64；选择主用和两个备用节点 |
-| 任务与存储 | 复用既有监控的节点、进行中任务、传输、容量及清理记录 |
-| 工具目录 | 文件、SMB、VNC、Moonlight、原生应用、Claude、训练接口的入口 |
-| 指南 | 安装、服务注册、网络与日常维护说明 |
+| 会话 | Remote Control 自动发现、后台会话、历史接续、模型与 effort 切换 |
+| 实时记录 | 持续后台同步、增量刷新、处理状态与耗时、工具输入和输出 |
+| 阅读与下载 | Markdown、图片、视频、PDF、Artifacts HTML 快照 |
+| 手机访问 | 紧凑会话布局、折叠信息、压缩响应、静态资源缓存 |
+| 管理面板 | 服务注册、软路由检查、订阅导入、主备节点选择 |
+| 算力适配 | 复用已有任务、GPU／CPU／内存、传输、存储与清理监控 |
 
-管理接口只允许固定的 SMB、VNC 和监控服务操作。路由、训练、出口守卫默认只读。操作有预览、状态变化检查、防重复执行和审计记录。
-
-订阅配置不会覆盖路由规则、DNS、监听地址和隔离守卫。当前 TCP 出口支持 SS、VMess、VLESS、Trojan 的受支持传输；UDP 型节点不自动开放。新增出口先生成计划，再在本机运行计划命令，弹出管理员授权；面板不收集管理员密码。
-
-## 兼容现有安装
-
-主命令为 `./bin/starport`。原 `./bin/claude-isolation` 命令、`claude-isolation-panel.service` 服务名及外部配置目录继续兼容；更名不改变现有路由、凭据或训练环境。
-
-## 部署方式
-
-Starport 通过适配器接入已有工具和服务。安装器负责管理面板的配置与注册；空白主机需要先部署路由、设备连接和所需计算环境。详细步骤见[安装与迁移](docs/INSTALL.md)。
-
-新机安装、真实管理员切换出口、代理全故障和整机冷启动都需要各自验收；“安装成功”不代替这些测试。
+发送消息时自动简体转繁体，无发送预览。停止、新建和批准操作保留确认；会话与文件接口始终需要认证。
 
 ## 目录
 
 ```text
-bin/                 命令行入口
-isolation_toolkit/   服务发现、状态适配、认证和订阅解析
-web/                 无前端构建依赖的管理界面
-docs/                运维与迁移指南
-examples/            仅含示例值的外部配置模板
-tests/               边界、订阅、计划及服务操作测试
-install.sh           一键引导入口
-install.py           配置生成与管理服务注册
-apply_exit.py        经过本机管理员授权的出口计划执行器
+server/              Starport 会话后端与网页源码、Linux 安装器
+client/              Starship 设备服务源码、macOS 安装器
+isolation_toolkit/   管理面板、服务发现和软路由适配
+web/                 管理面板界面
+bin/                 starport / starship 命令
+examples/            配置示例
+docs/                安装、网络与使用指南
 ```
 
-文档：[日常使用](docs/GUIDE.md)、[服务注册](docs/SERVICES.md)、[软路由](docs/NETWORK.md)、[安装迁移](docs/INSTALL.md)、[信息边界](docs/SECURITY.md)。
+旧安装的命令、服务和配置仍可通过适配器使用；新安装统一使用 Starport／Starship 名称。
 
-## 开发检查
-
-Markdown 渲染测试需要 Node.js；面板运行不依赖 Node.js。
+## 开发
 
 ```sh
-python3 -m unittest discover -s tests -v
+python3 -m pip install -r server/requirements.txt
+python3 -m unittest discover -s tests
+(cd server/console && python3 -m unittest discover -s tests)
+(cd server/console/web && npm ci --ignore-scripts && npm test && npm run build)
 node --test tests/markdown.test.cjs
 python3 audit_repository.py
 ```

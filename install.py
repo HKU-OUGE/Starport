@@ -68,7 +68,7 @@ def main():
     console_host = addresses[-1]
     config = {'version': 1, 'legacy_root': str(root), 'listen': addresses, 'allowed_subnets': subnets, 'port': a.port,
               'access_key_file': str(key), 'state_dir': str(state_dir()), 'monitor_port': 18880,
-              'client_interface': 'enp4s0', 'links': {'console': f'http://{console_host}:18881/', 'monitor_local': 'http://127.0.0.1:18880/'}}
+              'client_interface': '', 'links': {'console': f'http://{console_host}:18881/', 'monitor_local': 'http://127.0.0.1:18880/'}}
     if previous.exists():
         shutil.copy2(previous, previous.with_suffix('.json.previous'))
         config.update({k: old[k] for k in ('links', 'client_interface', 'monitor_port', 'access_key_file', 'router') if k in old})

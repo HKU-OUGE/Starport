@@ -34,7 +34,7 @@ def serve(config):
     monitor_lock = threading.Lock()
 
     class Handler(BaseHTTPRequestHandler):
-        server_version = 'IsolationToolkit'
+        server_version = 'Starport'
         sys_version = ''
 
         def log_message(self, *_):

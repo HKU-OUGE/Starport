@@ -1,0 +1,55 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="650" viewBox="0 0 1200 650" role="img" aria-labelledby="title desc">
+  <title id="title">Starport and Starship network topology</title>
+  <desc id="desc">Browsers reach Starport over a private VPN or protected HTTPS. Starport uses fixed SSH RPC to Starship. Optional compute adapters handle jobs and files. Client and job Internet access passes through a fail-closed virtual router and selected proxy.</desc>
+  <defs>
+    <linearGradient id="bg" x2="1" y2="1"><stop stop-color="#102239"/><stop offset="1" stop-color="#080d18"/></linearGradient>
+    <marker id="arrow" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto-start-reverse"><path d="M0 0L7 3.5L0 7" fill="#83cbd0"/></marker>
+    <marker id="gold" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto-start-reverse"><path d="M0 0L7 3.5L0 7" fill="#e6b77a"/></marker>
+    <style>text{font-family:Arial,'Noto Sans CJK SC','PingFang SC',sans-serif;fill:#f0ece3}.label{font-size:16px;fill:#a5b5c8}.small{font-size:14px;fill:#a5b5c8}.title{font-size:25px;font-weight:700}.box{fill:#13263c;stroke:#496079;stroke-width:1.5}.link{fill:none;stroke:#83cbd0;stroke-width:2;marker-end:url(#arrow)}.egress{fill:none;stroke:#e6b77a;stroke-width:2;marker-end:url(#gold)}</style>
+  </defs>
+  <rect width="1200" height="650" rx="24" fill="url(#bg)"/>
+  <circle cx="1140" cy="40" r="145" fill="none" stroke="#25394f"/><circle cx="1140" cy="40" r="190" fill="none" stroke="#1b2d43"/>
+  <text x="40" y="47" font-size="16" letter-spacing="4">STARPORT / STARSHIP</text>
+  <text x="40" y="82" class="title">一个入口，连接会话、设备与算力</text>
+  <rect x="32" y="127" width="250" height="400" rx="16" fill="#0d1b2b" stroke="#30455c"/>
+  <text x="52" y="159" class="label">远程访问</text>
+  <rect x="52" y="190" width="210" height="87" rx="12" class="box"/>
+  <text x="157" y="226" text-anchor="middle" font-size="21">手机 / 电脑浏览器</text>
+  <text x="157" y="254" text-anchor="middle" class="small">会话 · 状态 · 文件</text>
+  <path d="M157 277V321" class="link"/>
+  <rect x="52" y="324" width="210" height="96" rx="12" class="box"/>
+  <text x="157" y="359" text-anchor="middle" font-size="19">VPN / HTTPS</text>
+  <text x="157" y="388" text-anchor="middle" class="small">Access + Tunnel（可选）</text>
+  <rect x="346" y="127" width="435" height="400" rx="16" fill="#102237" stroke="#e6b77a" stroke-opacity=".65"/>
+  <text x="366" y="159" class="label">中继电脑 · Linux</text>
+  <rect x="366" y="190" width="395" height="120" rx="12" class="box"/>
+  <text x="388" y="226" class="title">Starport</text>
+  <text x="388" y="257" class="label">会话控制台 · 后台同步 · 管理面板</text>
+  <text x="388" y="286" class="small">固定接口 / 访问认证 / 独立运行配置</text>
+  <path d="M262 371H320V263H366" class="link"/>
+  <rect x="366" y="383" width="395" height="115" rx="12" class="box"/>
+  <text x="388" y="418" font-size="21">软路由 + 选定代理</text>
+  <text x="388" y="447" class="label">设备及任务出口 · 代理失效即断网</text>
+  <text x="388" y="477" class="small">复用既有部署；管理配置不传给客户端</text>
+  <path d="M565 310V380" fill="none" stroke="#83cbd0" stroke-width="1.5" stroke-dasharray="5 5"/>
+  <text x="580" y="352" class="small">配置与状态</text>
+  <rect x="845" y="127" width="323" height="195" rx="16" fill="#102237" stroke="#83cbd0"/>
+  <text x="866" y="159" class="label">受控设备 · macOS</text>
+  <text x="866" y="205" class="title">Starship</text>
+  <text x="866" y="239" class="label">Claude Desktop / Code</text>
+  <text x="866" y="271" class="small">设备端凭证 · 会话与文件接口</text>
+  <path d="M762 225H842" class="link"/>
+  <text x="802" y="203" text-anchor="middle" class="small">SSH RPC</text>
+  <rect x="845" y="353" width="323" height="145" rx="16" class="box"/>
+  <text x="866" y="389" font-size="22">本机 / 服务器算力</text>
+  <text x="866" y="421" class="label">提交 · 日志 · 依赖 · 产物</text>
+  <text x="866" y="452" class="small">通过已有训练服务接入</text>
+  <path d="M761 282H809V372H842" class="link"/>
+  <path d="M1010 322V339H803V428H764" class="egress"/>
+  <path d="M845 475H764" class="egress"/>
+  <path d="M565 499V554" class="egress"/>
+  <rect x="401" y="557" width="328" height="57" rx="28" fill="#29302f" stroke="#e6b77a"/>
+  <text x="565" y="593" text-anchor="middle" font-size="20">外部服务 / Internet</text>
+  <path d="M45 579H92" class="link"/><text x="104" y="585" class="small">管理 / 任务接口</text>
+  <path d="M858 579H905" class="egress"/><text x="917" y="585" class="small">受控外网出口</text>
+</svg>

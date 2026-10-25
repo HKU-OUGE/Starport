@@ -7,17 +7,23 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def config_dir():
-    return Path(os.environ.get('XDG_CONFIG_HOME', Path.home() / '.config')) / 'claude-isolation'
+    root = Path(os.environ.get('XDG_CONFIG_HOME', Path.home() / '.config'))
+    current = root / 'starport'
+    previous = root / 'claude-isolation'
+    return current if (current / 'config.json').exists() or not (previous / 'config.json').exists() else previous
 
 
 def state_dir():
-    return Path(os.environ.get('XDG_STATE_HOME', Path.home() / '.local/state')) / 'claude-isolation'
+    return Path(os.environ.get('XDG_STATE_HOME', Path.home() / '.local/state')) / 'starport/panel'
 
 
 def load(path=None):
     p = Path(path) if path else config_dir() / 'config.json'
     d = json.loads(p.read_text())
     for key in ('legacy_root', 'access_key_file', 'state_dir'):
+        if key == 'legacy_root' and not d.get(key):
+            d[key] = None
+            continue
         value = Path(d[key]).expanduser()
         d[key] = str((p.parent / value).resolve() if not value.is_absolute() else value.resolve())
     addresses = d.get('listen', ['127.0.0.1'])

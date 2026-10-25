@@ -1,5 +1,24 @@
 # 服务注册与生命周期
 
+新安装统一使用以下名称：
+
+| 位置 | 服务 | 作用 |
+| --- | --- | --- |
+| Linux 用户服务 | `starport-console.service` | 会话控制台、缓存和成品读取 |
+| Linux 用户服务 | `starport-panel.service` | 服务、软路由与算力管理面板 |
+| Mac LaunchAgent | `io.starport.starship` | 会话与后台执行 |
+| Mac LaunchAgent | `io.starport.starship-activity` | 实时处理状态 |
+| Mac LaunchAgent | `io.starport.starship-model-settings` | 模型与 effort 回执 |
+| Mac LaunchAgent | `io.starport.starship-auth` | 原生登录状态维护 |
+
+```sh
+./bin/starport services
+systemctl --user status starport-console.service starport-panel.service
+./bin/starship status  # 在客户端执行
+```
+
+## 既有服务适配
+
 服务清单由当前 systemd 实时读取，不以历史说明里的数量为准。注册来源以 `system-unit/名称`、`user-unit/名称` 展示，源仓库不记录账户专属路径。
 
 | 层级 | 组件 | 作用 |
@@ -15,8 +34,8 @@
 | 用户 | gpu-data、gpu-shared-data、gpu-artifacts | 上传、共享数据、执行中与完成产物读取 |
 | 用户 | gpu-cache-cleanup.timer | 按原规则清理已验证临时缓存 |
 | 用户 | gpu-status-dashboard.service | 既有只读监控 |
-| 用户 | claude-isolation-panel.service | 本仓库管理服务 |
-| 客户端 | local.session-service LaunchAgent | Claude 后台与 Remote Control 适配 |
+| 用户 | claude-isolation-panel.service | 旧版管理面板，兼容保留 |
+| 客户端 | local.session-service LaunchAgent | 旧版会话服务，迁移时不自动重启 |
 
 ## 查看实际注册
 

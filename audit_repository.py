@@ -1,10 +1,10 @@
 """Publication check for source files, independent from user message handling."""
 from pathlib import Path
 import re
+import subprocess
 import sys
 
 ROOT=Path(__file__).resolve().parent
-IGNORE={'.git','.venv','__pycache__','.pytest_cache'}
 PATTERNS={
  'personal_home':re.compile(r'/(?:home|Users)/[A-Za-z0-9_.-]+/'),
  'private_key':re.compile(r'-----BEGIN (?:OPENSSH |RSA |EC )?PRIVATE KEY-----'),
@@ -16,11 +16,13 @@ PATTERNS={
 
 def audit():
     errors=[];count=0
-    for p in ROOT.rglob('*'):
-        if any(x in IGNORE for x in p.relative_to(ROOT).parts):continue
+    # Inspect publication inputs, including tracked files that are now ignored.
+    paths = subprocess.check_output(['git','ls-files','--cached','--others','--exclude-standard','-z'], cwd=ROOT).decode().split('\0')
+    for name in sorted(set(filter(None, paths))):
+        p = ROOT / name
         if p.is_symlink():errors.append((str(p.relative_to(ROOT)),'symlink'));continue
         if not p.is_file():continue
-        if p.name.endswith(('.key','.pem','.sqlite','.local.json')) or p.name in ('.env','access.key'):
+        if p.name.endswith(('.key','.pem','.sqlite','.local.json','.log')) or p.name in ('.env','access.key','.credentials.json'):
             errors.append((str(p.relative_to(ROOT)),'private_runtime_file'));continue
         count+=1
         try:text=p.read_text()

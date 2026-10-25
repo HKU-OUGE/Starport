@@ -1,0 +1,9 @@
+{
+  "host": "127.0.0.1",
+  "port": 18881,
+  "ssh_host": "starship",
+  "state_dir": "../state/console",
+  "public_origin": "",
+  "tunnel_port": 18883,
+  "management_url": ""
+}

@@ -93,9 +93,9 @@ class Manager:
             futures = [pool.submit(inventory, x) for x in ('system', 'user')]
             info = [f.result() for f in futures]
         services = sorted([s for x in info for s in x['services']], key=lambda s: (s['group'], s['scope'], s['unit']))
-        root = Path(self.config['legacy_root'])
-        tools = [{**t, 'available': (root / t['path']).exists()} for t in TOOLS]
-        disk = shutil.disk_usage(root if root.exists() else Path.home())
+        root = Path(self.config['legacy_root']) if self.config.get('legacy_root') else None
+        tools = [{**t, 'available': bool(root and (root / t['path']).exists())} for t in TOOLS]
+        disk = shutil.disk_usage(root if root and root.exists() else Path.home())
         rc, linger = run(['/usr/bin/loginctl', 'show-user', str(os.getuid()), '--property=Linger', '--value'])
         rc, raw = run(['/usr/sbin/ip', '-j', 'address', 'show'])
         try:
@@ -124,6 +124,8 @@ class Manager:
 
         def worker():
             try:
+                if not self.config.get('legacy_root'):
+                    raise ValueError('router_adapter_missing')
                 script = Path(self.config['legacy_root']) / 'router-status.sh'
                 if not script.is_file() or script.is_symlink():
                     raise ValueError('router_adapter_missing')

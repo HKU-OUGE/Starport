@@ -1,0 +1,20 @@
+#!/usr/bin/env python3
+"""Local Starship status and installation commands."""
+from pathlib import Path
+import argparse
+import subprocess
+import sys
+
+sys.dont_write_bytecode = True
+root = Path(__file__).resolve().parents[1]
+parser = argparse.ArgumentParser(description='Starship client')
+parser.add_argument('command', choices=('status', 'install', 'check'))
+args, rest = parser.parse_known_args()
+if args.command in ('install', 'check'):
+    raise SystemExit(subprocess.run([sys.executable, str(root / 'client/install.py'), *(['--check'] if args.command == 'check' else []), *rest]).returncode)
+if rest:
+    parser.error('status does not take arguments')
+service = Path.home() / '.local/share/starship/client.py'
+if not service.is_file():
+    parser.error('Starship is not installed')
+raise SystemExit(subprocess.run([sys.executable, str(service), 'rpc'], input=b'{"action":"health"}\n').returncode)

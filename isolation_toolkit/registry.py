@@ -2,6 +2,9 @@
 import re
 
 SPECIAL = {
+    'starport-console.service': ('claude', 'Starport 会话控制台', '消息、状态、成品及模型设置。'),
+    'starport-panel.service': ('management', 'Starport 管理面板', '设备、服务、网络和算力入口。'),
+    'starport-tunnel.service': ('network', 'Starport HTTPS 入口', '可选的受保护公网入口。'),
     'mm-isolation.service': ('network', '主机隔离守卫', '先于路由启动；停止服务也不应卸载防泄漏规则。'),
     'macmini-router.service': ('network', '虚拟路由器', '负责网桥、虚拟机及有线口的安全启动顺序。'),
     'zerotier-one.service': ('network', '远程管理网络', '管理面板的私有访问网络。'),
@@ -21,7 +24,7 @@ ACTION_NAMES = {'start': '启动', 'stop': '停止', 'restart': '重启', 'enabl
 
 
 def in_scope(name):
-    return bool(re.fullmatch(r'(?:gpu-[A-Za-z0-9_-]+|mac-mini-[A-Za-z0-9_-]+|macmini-router|mm-isolation|mac-claude-console|claude-isolation-panel|zerotier-one)\.(?:service|timer)', name))
+    return bool(re.fullmatch(r'(?:starport-[A-Za-z0-9_-]+|gpu-[A-Za-z0-9_-]+|mac-mini-[A-Za-z0-9_-]+|macmini-router|mm-isolation|mac-claude-console|claude-isolation-panel|zerotier-one)\.(?:service|timer)', name))
 
 
 def describe(name):

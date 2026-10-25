@@ -10,3 +10,8 @@ dist/
 *.key
 *.pem
 *.sqlite*
+node_modules/
+server/console/web/public/pdf-assets/
+.DS_Store
+*.previous
+*.log

@@ -1,0 +1,25 @@
+{
+  "name": "starport-console",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "vite build",
+    "prebuild": "node prepare-assets.mjs",
+    "test": "node --test src/*.test.js"
+  },
+  "dependencies": {
+    "@streamdown/code": "2.0.0",
+    "katex": "0.19.0",
+    "pdfjs-dist": "6.4.299",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "remark-gfm": "4.0.1",
+    "remark-parse": "11.0.0",
+    "streamdown": "2.7.1",
+    "unified": "11.0.5"
+  },
+  "devDependencies": {
+    "vite": "^7.1.12"
+  }
+}
