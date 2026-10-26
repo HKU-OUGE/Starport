@@ -1,4 +1,5 @@
 import base64
+import copy
 import importlib.util
 import json
 from pathlib import Path
@@ -7,7 +8,7 @@ import unittest
 from unittest.mock import patch
 from isolation_toolkit.operations import Manager, inventory
 from isolation_toolkit.registry import CONTROL, in_scope
-from isolation_toolkit.subscriptions import parse, normalize, resolve, Subscriptions
+from isolation_toolkit.subscriptions import parse, normalize, resolve, endpoint_hosts, Subscriptions
 
 
 class NodeTests(unittest.TestCase):
@@ -46,6 +47,49 @@ external-controller: '0.0.0.0:9090'
             raw=json.dumps(s.snapshot())
             self.assertNotIn('EXAMPLE_ONLY',raw);self.assertNotIn('proxy.example.invalid',raw)
             self.assertEqual(len(s.snapshot()['nodes']),1)
+
+    def test_exact_hosts_alias_is_private_node_metadata(self):
+        nodes=parse('''proxies:
+  - {name: sample, type: trojan, server: entry.example.invalid, port: 443, password: EXAMPLE_ONLY}
+hosts:
+  entry.example.invalid: middle.example.invalid
+  middle.example.invalid: final.example.invalid
+  unrelated.example.invalid: 127.0.0.1
+rules: [MATCH,DIRECT]
+dns: {enable: true}
+''')
+        self.assertEqual(nodes[0]['server'],'entry.example.invalid')
+        self.assertEqual(nodes[0]['_endpoint_hosts'],['final.example.invalid'])
+        self.assertNotIn('hosts',nodes[0]);self.assertNotIn('dns',nodes[0])
+        self.assertIsNone(endpoint_hosts('other.example.invalid',{'*.example.invalid':'1.1.1.1'}))
+
+    def test_alias_cycles_depth_and_nonpublic_targets_are_rejected(self):
+        for mapping in ({'a.invalid':'b.invalid','b.invalid':'a.invalid'},
+                        {'a.invalid':'127.0.0.1'}, {'a.invalid':['1.1.1.1','10.0.0.1']},
+                        {'a.invalid':'198.18.0.1'}, {'a.invalid':['b.invalid']},
+                        {'a.invalid':'::1'}, {'a.invalid':[]},
+                        {f'n{i}.invalid':f'n{i+1}.invalid' for i in range(10)}):
+            server='n0.invalid' if 'n0.invalid' in mapping else 'a.invalid'
+            with self.subTest(mapping=mapping),self.assertRaises(ValueError): endpoint_hosts(server,mapping)
+        self.assertEqual(endpoint_hosts('a.invalid',{'a.invalid':['8.8.8.8','1.1.1.1']}),['8.8.8.8','1.1.1.1'])
+
+    def test_preview_pins_alias_and_keeps_original_tls_name(self):
+        with tempfile.TemporaryDirectory() as d:
+            s=Subscriptions({'state_dir':d})
+            content='proxies:\n'+''.join(f'  - {{name: node{i}, type: trojan, server: entry.example.invalid, port: {443+i}, tls: true, password: EXAMPLE_ONLY}}\n' for i in range(3))+'hosts: {entry.example.invalid: final.example.invalid}\n'
+            s.import_nodes({'content':content})
+            source=json.loads(next(s.folder.glob('source-*.json')).read_text())
+            old={'proxies':[{'name':f'SLOT-{i}','server':'9.9.9.9'} for i in range(3)],'proxy-groups':[{'name':'EXIT','type':'fallback'}],'tun':{'route-exclude-address':['9.9.9.9/32','192.0.2.0/24']},'interface-name':'eth3','ipv6':False}
+            with patch.object(s,'current_config',return_value=copy.deepcopy(old)),patch('isolation_toolkit.subscriptions.resolve',return_value=['1.1.1.1']) as resolver:
+                result=s.preview({'nodes':[n['_id'] for n in source['nodes']],'mode':'fallback'})
+                self.assertEqual([c.args[0] for c in resolver.call_args_list],['final.example.invalid']*3)
+            plan=json.loads((s.folder/f'plan-{result["id"]}.json').read_text())
+            for n in plan['candidate']['proxies']:
+                self.assertEqual(n['server'],'1.1.1.1');self.assertEqual(n['sni'],'entry.example.invalid')
+                self.assertFalse(any(k.startswith('_') for k in n))
+            self.assertEqual(plan['candidate']['tun']['route-exclude-address'],['192.0.2.0/24','1.1.1.1/32'])
+            raw=json.dumps(s.snapshot())
+            self.assertNotIn('final.example.invalid',raw);self.assertNotIn('EXAMPLE_ONLY',raw)
 
 
 class OperationsTests(unittest.TestCase):

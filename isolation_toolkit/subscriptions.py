@@ -88,14 +88,56 @@ def parse(raw):
     if '://' not in raw and not raw.startswith(('{', 'proxies:', 'payload:')):
         try: raw = b64(raw)
         except Exception: pass
+    hosts = {}
     if any(raw.startswith(s + '://') for s in ('ss','vmess','vless','trojan','hysteria2','hy2','tuic')):
         nodes = [uri(line.strip()) for line in raw.splitlines() if line.strip() and not line.startswith('#')]
     else:
         if any(isinstance(t, (yaml.tokens.AliasToken, yaml.tokens.AnchorToken)) for t in yaml.scan(raw)): raise ValueError('subscription_invalid')
         d = yaml.safe_load(raw)
         nodes = d.get('proxies', d.get('payload')) if isinstance(d, dict) else d
+        if isinstance(d, dict): hosts = d.get('hosts', {})
     if not isinstance(nodes, list) or not 1 <= len(nodes) <= 2000: raise ValueError('subscription_invalid')
-    return [normalize(n) for n in nodes]
+    result = [normalize(n) for n in nodes]
+    for node in result:
+        targets = endpoint_hosts(node['server'], hosts)
+        if targets is not None: node['_endpoint_hosts'] = targets
+    return result
+
+
+def endpoint_hosts(server, hosts):
+    """Follow exact node-entry aliases only; never install a global hosts map."""
+    if not isinstance(hosts, dict) or len(hosts) > 4096: raise ValueError('subscription_invalid')
+    canonical = lambda value: value.lower().rstrip('.')
+    exact = {}
+    for key, value in hosts.items():
+        if isinstance(key, str) and not any(c in key for c in '*+'):
+            key = canonical(key)
+            if key in exact: raise ValueError('subscription_invalid')
+            exact[key] = value
+    current = canonical(server)
+    if current not in exact: return None
+    seen = set()
+    for _ in range(8):
+        if current in seen: raise ValueError('endpoint_alias_cycle')
+        seen.add(current)
+        value = exact[current]
+        values = value if isinstance(value, list) else [value]
+        if not 1 <= len(values) <= 16: raise ValueError('subscription_invalid')
+        addresses = []
+        for item in values:
+            if not isinstance(item, str): raise ValueError('subscription_invalid')
+            try: address = ipaddress.ip_address(item)
+            except ValueError:
+                if isinstance(value, list) or len(item) > 253 or not re.fullmatch(r'(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z0-9-]{1,63}\.?', item):
+                    raise ValueError('subscription_invalid') from None
+                current = canonical(item)
+                if current not in exact: return [current]
+                break
+            if address.version != 4 or not address.is_global: raise ValueError('public_endpoint_required')
+            addresses.append(str(address))
+        else:
+            return list(dict.fromkeys(addresses))
+    raise ValueError('endpoint_alias_depth')
 
 
 def resolve(host):
@@ -193,7 +235,10 @@ class Subscriptions:
         if len(aliases)!=3 or len(old['proxy-groups'])!=1: raise ValueError('router_profile_mismatch')
         endpoints=[]
         for alias,n in zip(aliases,selected):
-            host=n['server']; ips=resolve(host); n['server']=ips[0]; n['name']=alias
+            host=n['server']
+            targets=n.get('_endpoint_hosts',[host])
+            ips=sorted({ip for target in targets for ip in resolve(target)})
+            n['server']=ips[0]; n['name']=alias
             if n.get('tls') and not n.get('servername') and not n.get('sni'):
                 n['sni' if n['type']=='trojan' else 'servername']=host
             n['interface-name']=old.get('interface-name','eth3')

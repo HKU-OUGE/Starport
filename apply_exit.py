@@ -7,15 +7,47 @@ import ipaddress
 import json
 import os
 import re
+import shlex
 import subprocess
 import sys
+import tempfile
 import time
 import yaml
+from urllib.parse import quote, urlencode
+
+
+def verify_exit(remote, group):
+    # The minimal router image need not include curl. Ask its existing core to
+    # perform a real, certificate-verified HTTPS request through the exit group.
+    path='/proxies/'+quote(group,safe='')+'/delay?'+urlencode({'timeout':12000,'url':'https://example.com/'})
+    request=shlex.quote('GET '+path+' HTTP/1.0')
+    raw=remote("s=$(cat /etc/mm-proxy/controller.secret); printf '%s\\r\\n' "+request+" 'Host: 127.0.0.1' \"Authorization: Bearer $s\" 'Connection: close' '' | nc 127.0.0.1 9090",timeout=16)
+    try:
+        header,body=raw.split(b'\r\n\r\n',1)
+        if header.split(b'\r\n',1)[0].split()[1]!=b'200': raise ValueError()
+        delay=json.loads(body)['delay']
+        if type(delay) not in (int,float) or not 0<=delay<=12000: raise ValueError()
+    except (ValueError,KeyError,IndexError,TypeError):
+        raise ValueError('new_exit_https_failed') from None
+
+
+def reset_guard_tables(text):
+    """Recreate owned tables atomically: flushing a table leaves its sets alive."""
+    allowed = {('inet', 'mm_exit'), ('bridge', 'mm_exit'), ('inet', 'mm_proxy_guard')}
+    def replace(match):
+        family, name = match.group(1), match.group(2)
+        if (family, name) not in allowed:
+            raise ValueError('unowned_guard_table')
+        # The preceding idempotent add also makes this safe on a fresh boot.
+        if not re.search(r'(?m)^\s*add table ' + family + r' ' + name + r'\s*$', text[:match.start()]):
+            raise ValueError('guard_table_creation_missing')
+        return 'delete table ' + family + ' ' + name
+    return re.sub(r'(?m)^\s*flush table (inet|bridge) (\w+)[ \t]*$', replace, text)
 
 
 def replace_set(text, name, endpoints):
     elements = ', '.join(f'{ip} . {port}' for ip, port in sorted(set(endpoints)))
-    pattern = r'(set\s+' + re.escape(name) + r'\s*\{\s*type\s+ipv4_addr\s*\.\s*inet_service\s*;\s*elements\s*=\s*\{)[^}]*(\})'
+    pattern = r'(set\s+' + re.escape(name) + r'\s*\{\s*type\s+ipv4_addr\s*\.\s*inet_service[ \t]*(?:;\s*|\r?\n\s*)elements\s*=\s*\{)[^}]*(\})'
     result, count = re.subn(pattern, lambda m: m[1] + ' ' + elements + ' ' + m[2], text)
     if count not in (1, 2): raise ValueError('unrecognized_guard_layout')
     return result
@@ -72,8 +104,8 @@ def apply(config, plan_id, check=False):
             if not supported or normalized!=node: raise ValueError('unsupported_node_fields')
             new_pairs.append((str(address),port))
         if len(set(new_pairs))!=3: raise ValueError('distinct_endpoints_required')
-        host_guard=(host_dir/'host-guard.nft').read_text();old_endpoints=(host_dir/'endpoints.json').read_bytes()
-        guest_guard=remote('cat /etc/mm-proxy/guard.nft').decode()
+        host_guard=reset_guard_tables((host_dir/'host-guard.nft').read_text());old_endpoints=(host_dir/'endpoints.json').read_bytes()
+        guest_guard=reset_guard_tables(remote('cat /etc/mm-proxy/guard.nft').decode())
         new_host=replace_set(host_guard,'tcp_endpoints',new_pairs);new_guest=replace_set(guest_guard,'nodes',new_pairs)
         encoded=yaml.safe_dump(candidate,allow_unicode=True,sort_keys=False).encode()
         # Temporary validation is private and does not reload any running service.
@@ -83,7 +115,9 @@ def apply(config, plan_id, check=False):
         remote('nft -c -f /etc/mm-proxy/toolkit-guard.nft')
         run(['nft','-c','-f','-'],new_host.encode())
         if check: return {'ok':True,'validated':True,'changed':False}
-        backup=host_dir/'toolkit-backups'/plan_id;backup.mkdir(parents=True,mode=0o700)
+        backups=host_dir/'toolkit-backups';backups.mkdir(parents=True,mode=0o700,exist_ok=True)
+        # Preserve each attempt: a failed application must remain retryable.
+        backup=Path(tempfile.mkdtemp(prefix=plan_id+'-',dir=backups))
         for name,content in [('host-guard.nft',host_guard.encode()),('endpoints.json',old_endpoints),('guest-guard.nft',guest_guard.encode()),('config.yaml',old_raw)]:
             (backup/name).write_bytes(content);(backup/name).chmod(0o600)
         routes=['python3',str(host_dir/'host-routes.py')]
@@ -104,7 +138,7 @@ def apply(config, plan_id, check=False):
             for _ in range(3):
                 time.sleep(3)
                 try:
-                    remote("curl --silent --fail --max-time 12 --proxy http://127.0.0.1:17890 --output /dev/null https://example.com/",timeout=16);success=True;break
+                    verify_exit(remote,group['name']);success=True;break
                 except Exception: pass
             if not success: raise ValueError('new_exit_https_failed')
             result={'ok':True,'applied':True,'plan':plan_id,'checked_at':time.time()}
