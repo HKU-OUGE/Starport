@@ -1,0 +1,21 @@
+{
+  "service_root": "../existing-tools/gpu-service",
+  "state_dir": "../state/compute-sync",
+  "api_token": "../state/compute/api-token",
+  "management_token": "../state/compute/management-token",
+  "interval_seconds": 30,
+  "max_stale_seconds": 120,
+  "recovery_successes": 2,
+  "nodes": [
+    {
+      "name": "compute-a",
+      "directory": "compute-a",
+      "port": 18770,
+      "ssh_alias": "compute-a",
+      "state_root": "../state/compute-a",
+      "operator_enabled": true,
+      "policy": {"reserve_cpus": 2, "reserve_memory_gib": 8},
+      "restart_command": ["systemctl", "--user", "restart", "compute-a-api.service"]
+    }
+  ]
+}

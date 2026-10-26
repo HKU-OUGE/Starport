@@ -36,6 +36,7 @@ Windows 使用 `Starport` 任务文件夹中的同名用户任务。后台监督
 | 用户 | gpu-data、gpu-shared-data、gpu-artifacts | 上传、共享数据、执行中与完成产物读取 |
 | 用户 | gpu-cache-cleanup.timer | 按原规则清理已验证临时缓存 |
 | 用户 | gpu-status-dashboard.service | 既有只读监控 |
+| 用户 | starport-compute-sync.service | 服务器连接、资源规格与调度入口自动同步 |
 | 用户 | claude-isolation-panel.service | 旧版管理面板，兼容保留 |
 | 客户端 | local.session-service LaunchAgent | 旧版会话服务，迁移时不自动重启 |
 
@@ -72,3 +73,27 @@ systemctl --user disable --now claude-isolation-panel.service
 - 每个操作先显示目标与影响，确认时再次核对服务状态，按操作 ID 去重。
 
 维护训练核心前，按该后端的已有流程暂停新入口，等待任务和资源释放，再在维护窗口操作。不能用本面板重启绕开这些步骤。
+
+## 服务器自动同步
+
+后台每 30 秒检查已注册节点的 SSH、实际资源、执行环境和代理 HTTPS 出口；失联后连续两次成功才恢复入口。首次接入通过完整检查即可启用，后台重启沿用已有核验记录。失联或出口不可用时暂停该节点的新任务，保留运行中任务和资源预留。超过 120 秒未取得新状态时，调度按状态过期处理。
+
+CPU、内存和 GPU 配额随实例规格更新，并保留配置中的系统余量和服务上限。旧接收进程有任务时继续运行，空闲后才加载新版；手动暂停不会被自动恢复。同步器重启沿用上次核验记录，过期记录标为待核对；监控保留离线节点，显示最后检查时间。
+
+已有训练服务可从 `examples/compute-sync.example.json` 建立本地配置，再注册后台服务：
+
+```sh
+python3 -m isolation_toolkit.compute_sync --config ../config/compute-sync.json --install
+```
+
+该适配器连接现有 Linux 训练执行器。`dsw-pool.json` 中的 `operator_enabled: false` 表示人工停用；`enabled` 由同步器维护。日常暂停仍使用训练服务的暂停／恢复接口。未知节点不会自动加入，退役节点不会自动启用。
+
+接入端需已有节点注册表、每节点的 `profile.json` / `capacity.json` / `operator.json`、任务状态目录，以及 `/health` 和 `/management/pause`、`/management/resume` 接口。此命令安装同步服务，训练执行器仍由原服务安装。
+
+调度与监控读取同一份 `node-status.json`，通过以下接口处理状态过期；调度只向 `enabled` 节点提交，节点接口继续执行人工暂停检查。监控保留所有返回节点，只展示公开别名、资源额度、`connection_state` 和 `last_checked_at`，不直接返回原始注册表。
+
+```python
+from isolation_toolkit.compute_availability import resolve_nodes
+
+nodes = resolve_nodes(registry, snapshot)
+```

@@ -5,6 +5,7 @@ SPECIAL = {
     'starship.service': ('claude', 'Starship 客户端', '设备会话接口。'),
     'starport-console.service': ('claude', 'Starport 会话控制台', '消息、状态、成品及模型设置。'),
     'starport-panel.service': ('management', 'Starport 管理面板', '设备、服务、网络和算力入口。'),
+    'starport-compute-sync.service': ('management', '服务器状态同步', '连接、资源规格与调度入口自动同步。'),
     'starport-tunnel.service': ('network', 'Starport HTTPS 入口', '可选的受保护公网入口。'),
     'mm-isolation.service': ('network', '主机隔离守卫', '先于路由启动；停止服务也不应卸载防泄漏规则。'),
     'macmini-router.service': ('network', '虚拟路由器', '负责网桥、虚拟机及有线口的安全启动顺序。'),
