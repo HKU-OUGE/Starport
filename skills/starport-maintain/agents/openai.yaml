@@ -1,0 +1,4 @@
+interface:
+  display_name: "维护 · 更新与卸载"
+  short_description: "Diagnose, update or remove an existing installation"
+  default_prompt: "使用 $starport-maintain 帮我完成当前 Starport 部署任务，先检查现状再操作。"

@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="zh-CN"><head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#080d18"><meta name="description" content="用两台电脑搭建 Starport：选择系统，按步骤安装、配对与验收。">
+  <title>Starport · 两台电脑，开始搭建</title>
+  <link rel="icon" href="../assets/starport-mark.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="style.css"><script src="guide.js" defer></script>
+</head><body>
+  <header class="masthead"><a class="brand" href="./"><img src="../assets/starport-mark.svg" width="40" height="40" alt=""><span>Starport</span></a><nav aria-label="主导航"><a href="#setup">开始搭建</a><a href="#skills">Agent Skills</a><a href="https://github.com/HKU-OUGE/Starport" target="_blank" rel="noopener noreferrer">GitHub ↗</a></nav></header>
+  <main>
+    <section class="intro"><div><h1>两台电脑。<br>一个随时可访问的<br class="mobile-break"> Claude 工作台。</h1><p>A 管连接，B 跑 Claude。<br>在浏览器里接续会话、传文件、看结果。</p></div><div class="intro-actions"><a class="button primary" href="#setup">开始搭建 <span aria-hidden="true">↗</span></a><button id="agent-copy" type="button">交给 Agent 配置 <span aria-hidden="true">⧉</span></button><span class="meta">无需先弄懂网络术语，从下面的步骤开始。</span></div></section>
+    <figure class="architecture"><img src="../assets/two-computers.svg" width="1120" height="370" alt="A 运行 Starport 管理连接；B 运行 Starship、Claude 和项目；严格隔离时通过独立网关与指定代理联网。"></figure>
+    <div class="mobile-flow" aria-label="两台电脑的职责"><div><b>A · Starport</b><span>地面站：网页与管理</span></div><span class="flow-arrow" aria-hidden="true">↓ 受限 SSH</span><div><b>B · Starship</b><span>工作星舰：Claude 与项目</span></div><p>严格隔离时：B → 独立网关 → 指定代理。</p></div>
+    <section id="setup" class="setup"><div class="section-heading"><div><h2>选择你的两台电脑</h2><p>命令会跟随系统切换。所有命令都在仓库目录运行。</p></div><button id="reset" class="quiet" type="button">重置进度</button></div>
+      <form id="choices" class="choices"><fieldset><legend>A · 地面站</legend><label for="server-os">运行 Starport 的系统</label><select id="server-os"><option value="linux">Linux</option><option value="mac">macOS</option><option value="windows">Windows</option></select><label class="check"><input type="checkbox" id="startup-a" checked>用户登录后自动启动</label></fieldset><fieldset><legend>B · 工作星舰</legend><label for="client-os">运行 Starship 的系统</label><select id="client-os"><option value="mac">macOS</option><option value="linux">Linux</option><option value="windows">Windows</option></select><label class="check"><input type="checkbox" id="startup-b" checked>用户登录后自动启动</label></fieldset></form>
+      <div class="progress-line"><span id="progress-label">已勾选 0 / 8 步</span><progress id="progress" max="8" value="0" aria-label="手动记录的配置进度"></progress></div>
+      <div class="workspace"><nav id="steps" aria-label="配置步骤"></nav><article id="step-content" aria-live="polite"></article></div>
+    </section>
+    <section id="skills" class="skills"><div class="section-heading"><div><h2>需要的时候，让 Agent 接手。</h2><p>选择具体任务，复制指令给仓库中的 Agent。</p></div><a href="https://github.com/HKU-OUGE/Starport/blob/main/docs/SKILLS.md" target="_blank" rel="noopener noreferrer">查看使用方式 ↗</a></div><div id="skill-list"></div></section>
+    <section class="resources"><h2>继续了解</h2><div><a href="https://github.com/HKU-OUGE/Starport/blob/main/docs/MAC.md">新 Mac 准备清单 ↗</a><a href="https://github.com/HKU-OUGE/Starport/blob/main/docs/PAIRING.md">SSH 配对图解 ↗</a><a href="https://github.com/HKU-OUGE/Starport/blob/main/docs/NETWORK.md">网络与订阅 ↗</a><a href="https://github.com/HKU-OUGE/Starport/blob/main/docs/MAINTENANCE.md">更新与卸载 ↗</a></div></section>
+  </main>
+  <footer><span>Starport / Starship</span><span>进度仅保存在当前浏览器，不收集密码或配置。</span></footer>
+  <div id="notice" role="status" aria-live="polite"></div>
+  <noscript><p>请启用 JavaScript 使用交互步骤，或阅读仓库的 docs/QUICKSTART.md。</p></noscript>
+</body></html>

@@ -16,6 +16,17 @@ from .config import ROOT
 from .operations import Manager, monitor
 from .subscriptions import Subscriptions
 
+DOC_NAMES = ('GUIDE','QUICKSTART','MAC','PAIRING','REMOTE','MAINTENANCE','SKILLS',
+             'CONSOLE','SERVICES','NETWORK','INSTALL','SECURITY')
+PUBLIC_DOC_FILES = {
+    '/learn/quickstart/': ('quickstart/index.html','text/html; charset=utf-8'),
+    '/learn/quickstart/index.html': ('quickstart/index.html','text/html; charset=utf-8'),
+    '/learn/quickstart/style.css': ('quickstart/style.css','text/css; charset=utf-8'),
+    '/learn/quickstart/guide.js': ('quickstart/guide.js','text/javascript; charset=utf-8'),
+    **{'/learn/assets/'+name:('assets/'+name,'image/svg+xml') for name in
+       ('two-computers.svg','starport-mark.svg','starport-cover.svg','starport-topology.svg')},
+}
+
 
 def serve(config):
     state = Path(config['state_dir']); state.mkdir(parents=True, exist_ok=True, mode=0o700)
@@ -81,6 +92,9 @@ def serve(config):
             if path in files:
                 file, mime = files[path]
                 return self.respond(200, (ROOT / 'web' / file).read_bytes(), mime)
+            if path in PUBLIC_DOC_FILES:
+                file,mime=PUBLIC_DOC_FILES[path]
+                return self.respond(200,(ROOT/'docs'/file).read_bytes(),mime)
             if path == '/health':
                 return self.respond(200, {'ok': True})
             ident = self.identity()
@@ -106,7 +120,7 @@ def serve(config):
                     return self.respond(200, {'actions': [{'id': r[0], 'status': r[1], 'result': json.loads(r[2]) if r[2] else None, 'created': r[3]} for r in rows]})
                 if path.startswith('/api/docs/'):
                     name = path.removeprefix('/api/docs/')
-                    if name not in ('GUIDE', 'CONSOLE', 'SERVICES', 'NETWORK', 'INSTALL', 'SECURITY'):
+                    if name not in DOC_NAMES:
                         return self.respond(404, {'error': 'not_found'})
                     return self.respond(200, {'name': name, 'text': (ROOT / 'docs' / (name + '.md')).read_text(encoding='utf-8')})
                 return self.respond(404, {'error': 'not_found'})

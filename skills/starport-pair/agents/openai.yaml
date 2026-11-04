@@ -1,0 +1,4 @@
+interface:
+  display_name: "SSH · 受限配对"
+  short_description: "Pair devices with dedicated keys and host verification"
+  default_prompt: "使用 $starport-pair 帮我完成当前 Starport 部署任务，先检查现状再操作。"

@@ -1,5 +1,7 @@
 # 安装与更新
 
+第一次安装建议按[两台电脑教程](QUICKSTART.md)操作；本页用于查参数。
+
 ## 选择角色
 
 | | Linux | macOS | Windows |
@@ -60,6 +62,14 @@ python3 setup.py server --router-profile ../private/router-remote.json
 三系统使用 [远端网关配置](../examples/router-remote.example.json) 管理已有 Linux 网关；Linux 原部署可继续用 [本机适配配置](../examples/router-profile.example.json)。部署与网口边界见[网络与出口](NETWORK.md)。
 
 ## 更新与验收
+
+| 选择 | 参数与启动方式 |
+| --- | --- |
+| 用户登录后启动 | 正常安装；按系统注册用户服务 |
+| 先注册，暂不运行 | `--no-start`；仍会在之后登录时启动 |
+| 不注册，手动运行 | `--no-register`；安装后用 `python3 tools/run_services.py server` 或 `client` |
+
+`--no-register` 不会取消旧注册；已有安装要取消自启时按[维护指南](MAINTENANCE.md)操作。
 
 `--plan` 仅生成计划；可增加 `--platform Linux`、`Darwin` 或 `Windows` 查看对应服务定义。`--no-start` 只写入配置和注册文件。Starship 更新会拒绝覆盖仍有活动锁或未结束后台会话的安装。
 

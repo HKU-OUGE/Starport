@@ -1,0 +1,4 @@
+interface:
+  display_name: "Starship · 客户端安装"
+  short_description: "Prepare a Mac, Windows or Linux client for Starship"
+  default_prompt: "使用 $starport-starship 帮我完成当前 Starport 部署任务，先检查现状再操作。"

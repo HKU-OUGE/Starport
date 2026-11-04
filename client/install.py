@@ -1,4 +1,4 @@
-"""Register Starship on macOS without replacing an active session service."""
+"""Register Starship user services without replacing an active session service."""
 from pathlib import Path
 import argparse
 import json
@@ -68,6 +68,7 @@ def main(argv=None):
     parser.add_argument('--plan', action='store_true')
     parser.add_argument('--yes', action='store_true')
     parser.add_argument('--no-start', action='store_true')
+    parser.add_argument('--no-register', action='store_true', help='Install files only; start manually without login registration')
     args = parser.parse_args(argv)
     os.umask(0o077)
     home = Path.home(); root, units = installation(home, Path(sys.executable))
@@ -82,18 +83,24 @@ def main(argv=None):
     sys.path.insert(0, str(SOURCE))
     from client import cli
     try:
-        cli()
+        executable = cli()
         check_inactive(root)
     except ValueError as exc:
         parser.error(str(exc))
     if args.check:
         print('Starship prerequisites available. Enable Remote Login and authenticate Claude on this device.'); return
-    if not args.yes and input('Install Starship background services? [y/N] ').lower() != 'y':
+    prompt = 'Install Starship files for manual startup? [y/N] ' if args.no_register else 'Install Starship background services? [y/N] '
+    if not args.yes and input(prompt).lower() != 'y':
         return
     secure_dir(root)
     if root.is_symlink():
         parser.error('Linked installation directory is not supported')
     secure_dir(root/'state')
+    runner = root / 'runner.json'
+    if runner.is_symlink():
+        parser.error('Linked runner configuration is not supported')
+    runner.write_text(json.dumps({'claude_bin': executable})+'\n', encoding='utf-8')
+    runner.chmod(0o600)
     shutil.copytree(REPO/'starport_common',root/'starport_common',dirs_exist_ok=True,ignore=shutil.ignore_patterns('__pycache__','*.pyc'))
     for source in SOURCE.glob('*.py'):
         destination = root / source.name
@@ -109,6 +116,9 @@ def main(argv=None):
     launcher.chmod(0o700)
     definitions=dict(services.prepare(name,[sys.executable,root/script,*arguments],root,root/'state',sys.executable,interval=interval)
                      for name,script,arguments,interval in jobs)
+    if args.no_register:
+        print('Starship files installed. Start manually with: '+('py -3' if system=='Windows' else 'python3')+' tools/run_services.py client')
+        return
     services.register(definitions,args.no_start)
     print('Starship installed. Use ./bin/starship status and pair its SSH key with Starport.')
     print('Services run in your user session. After a reboot, sign in once; locking the screen preserves them.')

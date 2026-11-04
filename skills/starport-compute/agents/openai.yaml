@@ -1,0 +1,4 @@
+interface:
+  display_name: "算力 · 节点接入"
+  short_description: "Connect existing isolated compute resources safely"
+  default_prompt: "使用 $starport-compute 帮我完成当前 Starport 部署任务，先检查现状再操作。"

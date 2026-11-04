@@ -1,81 +1,73 @@
 # Starport
 
-![Starport — 连接你的 AI、设备与算力](docs/assets/starport-cover.svg)
+**把另一台电脑上的 Claude，变成随时可访问的工作台。**
+用浏览器或手机接续会话、上传图片、查看执行过程，下载报告和视频。
 
-[安装](docs/INSTALL.md) · [会话控制](docs/CONSOLE.md) · [网络与出口](docs/NETWORK.md) · [服务管理](docs/SERVICES.md)
+![两台电脑如何组成 Starport](docs/assets/two-computers.svg)
 
-**Starport 是地面站，Starship 是星舰。** 在手机或电脑上接续 Claude 会话，查看任务、文件与设备状态。
+**Starport 是地面站，Starship 是星舰。** A 管连接，B 保存 Claude、项目和会话。
+两端均支持 Linux、macOS、Windows；需要严格网络隔离时，增加独立 Linux／OpenWrt 网关。
 
-| 组件 | 安装位置 | 职责 |
-| --- | --- | --- |
-| **Starport · 服务端** | Linux / macOS / Windows | 网页控制台、消息缓存、服务面板、软路由与算力适配 |
-| **Starship · 客户端** | Linux / macOS / Windows | Claude Desktop／Code 会话、实时状态、文件与成品读取 |
+## 从哪里开始
 
-## 网络拓扑
-
-![Starport 与 Starship 的管理、计算和网络连接](docs/assets/starport-topology.svg)
-
-浏览器通过 VPN 或受保护的 HTTPS 入口访问 Starport。Starport 通过固定 SSH 接口连接 Starship；设备与训练任务的外网出口由独立的 OpenWrt／Linux 软路由控制。Mac 和 Windows 可在虚拟机中运行网关，通过 SSH 管理节点与出口；Linux 原有双守卫适配继续可用。
-
-## 快速开始
-
-安装 **Starport 服务端**：
-
-```sh
-python3 setup.py server --check
-python3 setup.py server --ssh-host starship
-./bin/starport urls
-./bin/starport key
-```
-
-安装 **Starship 客户端**：
-
-```sh
-python3 setup.py client --check
-python3 setup.py client
-./bin/starship status
-```
-
-Windows 使用 `py -3 setup.py server` / `py -3 setup.py client`，或运行 `install.ps1`。两端需要 Python 3.10+；服务端另需 Node.js 22.12+、npm 和 OpenSSH。服务分别注册到 systemd、launchd、Windows 任务计划。连接与登录见[安装指南](docs/INSTALL.md)。
-
-## 工作台
-
-| 能力 | 内容 |
+| 你的情况 | 入口 |
 | --- | --- |
-| 会话 | Remote Control 自动发现、后台会话、历史接续、模型与 effort 切换 |
-| 实时记录 | 持续后台同步、增量刷新、处理状态与耗时、工具输入和输出 |
-| 图片与文件 | 附件按钮、图片缩略图、分块上传、进度、断线续传、会话附件 |
-| 阅读与下载 | Markdown、图片、视频、PDF、Artifacts HTML 快照 |
-| 手机访问 | 紧凑会话布局、折叠信息、压缩响应、静态资源缓存 |
-| 管理面板 | 服务注册、软路由检查、订阅导入、主备节点选择 |
-| 算力适配 | 节点与资源自动同步、专用任务断线接管、日志续读、结果续传 |
+| 有两台空电脑 | [交互教程](https://hku-ouge.github.io/Starport/quickstart/) · [文字版步骤](docs/QUICKSTART.md) |
+| 想让 Agent 安装 | [7 个引导 Skills](docs/SKILLS.md) · [AGENTS.md](AGENTS.md) |
+| 客户端是 Mac | [新 Mac 清单](docs/MAC.md) |
+| 已安装，遇到问题 | [排障、更新与卸载](docs/MAINTENANCE.md) |
 
-发送消息时自动简体转繁体，无发送预览。停止、新建和批准操作保留确认；会话与文件接口始终需要认证。
+教程可直接打开 `docs/quickstart/index.html`，安装后从管理面板进入。
 
-## 目录
+## 最短安装路径
 
-```text
-server/              Starport 会话后端、网页与跨平台安装器
-client/              Starship 设备服务与跨平台安装器
-starport_common/     跨平台通信、权限与服务生命周期
-router/              Linux 软路由虚拟机执行入口
-isolation_toolkit/   管理面板、服务发现和软路由适配
-compute_runtime/     Linux 专用训练执行器的断线接管组件
-web/                 管理面板界面
-bin/                 starport / starship 命令
-examples/            配置示例
-docs/                安装、网络与使用指南
+先在两台电脑下载仓库。A 需要 Python 3.10+、Node.js 22.12+、npm 和 OpenSSH；
+B 需要 Python 3.10+、已登录的 Claude Code，以及 SSH 服务。
+
+```sh
+# B：安装客户端
+python3 tools/preflight.py client
+python3 setup.py client
+
+# A：按配对指南连接 B，再安装服务端
+python3 tools/pair.py verify
+python3 setup.py server --ssh-host starship
+python3 starport.py urls
 ```
 
-旧安装的命令、服务和配置仍可通过适配器使用；新安装统一使用 Starport／Starship 名称。
+Windows 使用 `py -3`；B 是 Windows 时，A 的安装命令增加 `--client-platform windows`。
+想手动运行而不注册登录启动，增加 `--no-register`，再用 `tools/run_services.py` 启动对应角色。
+详细过程见[两台电脑教程](docs/QUICKSTART.md)和 [SSH 配对](docs/PAIRING.md)。
+
+## 能做什么
+
+| 能力 | 使用方式 |
+| --- | --- |
+| 接续 Claude | 原生 Remote Control，或独立后台会话 |
+| 看清执行过程 | 持续同步、增量消息、状态与耗时、工具输入和输出 |
+| 图片与文件 | 上传附件、断点续传、图片／视频／PDF 预览、Artifacts 快照 |
+| 手机控制 | 紧凑布局；通过 [VPN 或 Access + Tunnel](docs/REMOTE.md)访问 |
+| 管理网络 | 导入订阅、选择主备节点、预览和应用受控出口计划 |
+| 连接算力 | 对接已有隔离训练服务，查看资源、任务、日志和结果 |
+
+会话发送时自动简体转繁体。访问码、账号登录和网络隔离是三个不同环节。
+Starport 不会仅凭安装控制台就创建虚拟机、配置防火墙或建立云端训练环境。
+
+## 使用指南
+
+[日常使用](docs/GUIDE.md) · [会话与附件](docs/CONSOLE.md) · [网络与订阅](docs/NETWORK.md) ·
+[算力与服务](docs/SERVICES.md) · [权限边界](docs/SECURITY.md)
 
 ## 开发
+
+`server/` 是网页服务，`client/` 是设备服务，`isolation_toolkit/` 是管理适配层，
+`compute_runtime/` 是 Linux 训练接管组件，`skills/` 与 `docs/` 提供操作指引。
 
 ```sh
 python3 -m pip install -r server/requirements.txt
 python3 -m unittest discover -s tests
 (cd server/console && python3 -m unittest discover -s tests)
 (cd server/console/web && npm ci --ignore-scripts && npm test && npm run build)
-node --test tests/markdown.test.cjs
+node --test tests/*.test.cjs
 python3 audit_repository.py
 ```

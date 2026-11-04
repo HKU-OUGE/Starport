@@ -34,10 +34,16 @@ test('tables, inline code, headings and lists render as semantic nodes',()=>{
 });
 test('every shipped guide has a title, a contents list and no HTML nodes',()=>{
  const dir=path.join(__dirname,'../docs');
- for(const name of ['GUIDE','SERVICES','NETWORK','INSTALL','SECURITY']){
+ for(const name of ['GUIDE','QUICKSTART','MAC','PAIRING','REMOTE','MAINTENANCE','SKILLS','SERVICES','NETWORK','INSTALL','SECURITY']){
   const nodes=descendants(context.markdownDocument(fs.readFileSync(path.join(dir,name+'.md'),'utf8')));
   assert.ok(nodes.some(n=>n.tag==='h1'),name);
   assert.ok(nodes.some(n=>n.tag==='nav'),name);
   assert.equal(nodes.some(n=>n.tag==='script'),false);
  }
+});
+test('only bundled guide illustrations and registered document links become active',()=>{
+ const nodes=descendants(context.markdownDocument('# Guide\n\n![Map](assets/two-computers.svg)\n\n[Pair](PAIRING.md)\n\n![Bad](https://example.invalid/image.svg)'));
+ const images=nodes.filter(n=>n.tag==='img');assert.equal(images.length,1);
+ assert.equal(images[0].src,'/learn/assets/two-computers.svg');
+ assert.ok(nodes.some(n=>n.tag==='a'&&n.href==='#docs'));
 });

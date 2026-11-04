@@ -7,3 +7,5 @@ a.button.primary{background:#e6b77a;color:#111a25;border-color:#e6b77a}a.button.
 @media(max-width:760px){.doc-layout{display:flex;flex-direction:column;gap:0}.doc-body{order:2;width:100%}.doc-toc{order:1;width:100%;flex:none}}
 .login{position:relative;z-index:1}
 @media(max-width:760px){.sidebar{position:relative}.sidebar footer{display:block;position:absolute;top:20px;right:14px;margin:0;padding:0;border:0}.sidebar footer button{padding:8px;font-size:12px;gap:6px}.sidebar footer .icon{width:16px;height:16px}}
+
+.guide-image{display:block;width:100%;height:auto;border:1px solid var(--line);border-radius:9px;margin:18px 0 26px}.guide-tabs select{max-width:300px}.guide-tabs{align-items:center;padding-bottom:18px}.onboarding-link{display:block;text-align:center;font-size:13px;margin-top:20px}

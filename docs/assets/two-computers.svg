@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1120" height="370" viewBox="0 0 1120 370" role="img" aria-labelledby="title desc">
+  <title id="title">Starport 两台电脑部署图</title><desc id="desc">浏览器和手机访问 A 的 Starport。A 用受限 SSH 连接 B 的 Starship。B 保存 Claude 和项目，通过独立网关及代理访问外网。远程算力可以后续接入。</desc>
+  <defs><marker id="arrow" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto"><path d="M0 0 7 3.5 0 7" fill="none" stroke="#80cbd0"/></marker></defs>
+  <rect width="1120" height="370" rx="16" fill="#0b1422"/>
+  <g font-family="system-ui, 'PingFang SC', 'Microsoft YaHei', sans-serif">
+    <text x="38" y="44" fill="#f0ece3" font-size="23" font-weight="600">一台管连接，一台跑 Claude。</text>
+    <text x="38" y="72" fill="#96aabe" font-size="14">先让两台电脑配对，再接入手机和算力。</text>
+    <rect x="38" y="111" width="145" height="102" rx="9" fill="#132235" stroke="#31445b"/>
+    <text x="110" y="153" text-anchor="middle" fill="#f0ece3" font-size="18">浏览器 / 手机</text>
+    <text x="110" y="182" text-anchor="middle" fill="#96aabe" font-size="13">查看 · 发送 · 下载</text>
+    <path d="M184 162H252" stroke="#80cbd0" stroke-width="2" marker-end="url(#arrow)"/>
+    <rect x="265" y="111" width="300" height="138" rx="9" fill="#17283b" stroke="#e6b77a"/>
+    <text x="287" y="146" fill="#e6b77a" font-size="14" font-weight="600">电脑 A · STARPORT</text>
+    <text x="287" y="179" fill="#f0ece3" font-size="22">地面站</text>
+    <text x="287" y="207" fill="#b9c9d9" font-size="14">网页控制台 · 连接配置 · 资源管理</text>
+    <text x="287" y="230" fill="#96aabe" font-size="12">Linux / macOS / Windows</text>
+    <path d="M566 168H686" stroke="#80cbd0" stroke-width="2" marker-end="url(#arrow)"/>
+    <text x="627" y="151" text-anchor="middle" fill="#80cbd0" font-size="13">受限 SSH</text>
+    <rect x="700" y="111" width="380" height="138" rx="9" fill="#122930" stroke="#80cbd0"/>
+    <text x="724" y="146" fill="#80cbd0" font-size="14" font-weight="600">电脑 B · STARSHIP</text>
+    <text x="724" y="179" fill="#f0ece3" font-size="22">工作星舰</text>
+    <text x="724" y="207" fill="#b9c9d9" font-size="14">Claude · 项目文件 · 会话与附件</text>
+    <text x="724" y="230" fill="#96aabe" font-size="12">Linux / macOS / Windows</text>
+    <path d="M889 249V298H711" fill="none" stroke="#80cbd0" stroke-width="2" marker-end="url(#arrow)"/>
+    <rect x="380" y="276" width="320" height="48" rx="7" fill="#142233" stroke="#39516a"/>
+    <text x="540" y="306" text-anchor="middle" fill="#d2dfeb" font-size="15">独立网关 → 指定代理 → 外网</text>
+    <path d="M380 300H190" stroke="#e6b77a" stroke-dasharray="5 5"/>
+    <text x="38" y="296" fill="#e6b77a" font-size="13">严格隔离时部署</text>
+    <text x="38" y="318" fill="#96aabe" font-size="12">网关可运行在 A 的 Linux 虚拟机中</text>
+    <text x="700" y="348" fill="#96aabe" font-size="12">远程 GPU / CPU 服务可在工作台跑通后接入</text>
+  </g>
+</svg>

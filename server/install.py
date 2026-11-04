@@ -114,6 +114,7 @@ def main(argv=None):
     parser.add_argument('--check', action='store_true', help='Read-only host checks')
     parser.add_argument('--plan', action='store_true', help='Print units without installing or connecting')
     parser.add_argument('--no-start', action='store_true', help='Register services without restarting them')
+    parser.add_argument('--no-register', action='store_true', help='Install files only; start manually without login registration')
     args = parser.parse_args(argv)
     os.umask(0o077)
     try:
@@ -163,6 +164,9 @@ def main(argv=None):
     definitions=dict(services.prepare(name,command,ROOT,state,python) for name,command in (
         ('starport-console',[python,ROOT/'server/console/server.py','--config',config_file]),
         ('starport-panel',[python,'-m','isolation_toolkit','--config',config_file.parent/'config.json','serve'])))
+    if args.no_register:
+        print('Starport files installed. Start manually with: '+('py -3' if system=='Windows' else 'python3')+' tools/run_services.py server')
+        return
     services.register(definitions,args.no_start)
     print('Starport installed. Use ./bin/starport urls and ./bin/starport key.')
     print('Services start in the user session. Linux linger is an optional host setting.')

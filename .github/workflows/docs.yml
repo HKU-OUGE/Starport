@@ -1,0 +1,42 @@
+name: Publish Starport tutorial
+on:
+  workflow_run:
+    workflows: [Verify Starport and Starship]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+concurrency:
+  group: starport-pages
+  cancel-in-progress: false
+jobs:
+  deploy:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'push' &&
+       github.event.workflow_run.head_repository.full_name == github.repository)
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+      - name: Require current main
+        run: test "$(git rev-parse HEAD)" = "$(git ls-remote origin refs/heads/main | cut -f1)"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python audit_repository.py
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: docs
+      - name: Publish tutorial
+        id: deployment
+        uses: actions/deploy-pages@v4

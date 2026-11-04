@@ -49,23 +49,8 @@ def clean(text, limit=12000):
 
 
 def cli():
-    configured = os.environ.get('STARSHIP_CLAUDE_BIN')
-    if configured:
-        executable = Path(configured).expanduser().resolve()
-        if not executable.is_file() or not os.access(executable, os.X_OK):
-            raise ValueError('runner_unavailable')
-        return str(executable)
-    root = desktop_home() / 'claude-code'
-    versions = sorted((p for p in (root.iterdir() if root.is_dir() else []) if re.fullmatch(r'\d+\.\d+\.\d+', p.name)),
-                      key=lambda p: tuple(map(int, p.name.split('.'))), reverse=True)
-    for version in versions:
-        paths = list(version.glob('*/claude.app/Contents/MacOS/claude'))
-        if len(paths) == 1 and paths[0].is_file():
-            return str(paths[0])
-    standalone = shutil.which('claude')
-    if standalone:
-        return standalone
-    raise ValueError('runner_unavailable')
+    from runner_locator import find_claude
+    return find_claude()
 
 
 def safe_directory(value):

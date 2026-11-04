@@ -1,0 +1,4 @@
+interface:
+  display_name: "网络 · 受控出口"
+  short_description: "Configure and validate controlled proxy-only networking"
+  default_prompt: "使用 $starport-network 帮我完成当前 Starport 部署任务，先检查现状再操作。"

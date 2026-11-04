@@ -1,0 +1,4 @@
+interface:
+  display_name: "手机 · 远程访问"
+  short_description: "Connect a phone through VPN or Cloudflare Access"
+  default_prompt: "使用 $starport-remote 帮我完成当前 Starport 部署任务，先检查现状再操作。"
