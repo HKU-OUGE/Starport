@@ -1,3 +1,4 @@
+import {validateSessionList,subscribeReadRecovery} from './consoleRequest.js';
 import {useState, useEffect, useRef, useCallback} from 'react';
 import {applyDelta, SessionStore} from './sessionStore.js';
 
@@ -10,6 +11,7 @@ export function useConsoleReads(auth, selected, api) {
   const [revision, setRevision] = useState(0);
   const cache = useRef(new SessionStore());
   const refresh = useCallback(() => setRevision(n => n + 1), []);
+  useEffect(() => auth ? subscribeReadRecovery(refresh) : undefined, [auth, refresh]);
 
   useEffect(() => {
     if (!auth) {cache.current.clear(); setSessions([]); setDetail(null); setStatus(null); setLoading(true); setDetailSync({}); setListError('');}
@@ -17,18 +19,18 @@ export function useConsoleReads(auth, selected, api) {
 
   useEffect(() => {
     if (!auth) return;
-    let active = true, timer;
+    let active = true, timer, waitingSince=Date.now();
     const controller = new AbortController();
     async function poll() {
       let delay = 10000;
       try {
-        const value = await api('/api/sessions?background=1', undefined, {signal: controller.signal});
+        const value = validateSessionList(await api('/api/sessions?background=1', undefined, {signal: controller.signal}));
         if (!active) return;
-        if (Array.isArray(value.sessions)) {setSessions(value.sessions); setLoading(false);}
+        if (Array.isArray(value.sessions)) {setSessions(value.sessions); setLoading(false); waitingSince=0;}
         if (value.loading || value.sync?.restored) delay = 750;
         if (value.sync?.error) delay = 4000;
-        setListError(value.sync?.error || '');
-      } catch (error) {if (active) {setListError(error.message); delay = 4000;}}
+        setListError(value.sync?.error || (waitingSince&&Date.now()-waitingSince>=12000?'session_list_waiting':''));
+      } catch (error) {if (active) {setListError(error.code||error.message); setLoading(false); delay = ['access_login_required','access_check_required'].includes(error.code)?30000:4000;}}
       finally {if (active) timer = setTimeout(poll, delay);}
     }
     poll();
@@ -52,7 +54,7 @@ export function useConsoleReads(auth, selected, api) {
     }
     poll();
     return () => {active = false; controller.abort(); clearTimeout(timer);};
-  }, [auth, api]);
+  }, [auth, revision, api]);
 
   useEffect(() => {
     if (!auth || !selected) {setDetail(null); return;}
