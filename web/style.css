@@ -9,3 +9,5 @@ a.button.primary{background:#e6b77a;color:#111a25;border-color:#e6b77a}a.button.
 @media(max-width:760px){.sidebar{position:relative}.sidebar footer{display:block;position:absolute;top:20px;right:14px;margin:0;padding:0;border:0}.sidebar footer button{padding:8px;font-size:12px;gap:6px}.sidebar footer .icon{width:16px;height:16px}}
 
 .guide-image{display:block;width:100%;height:auto;border:1px solid var(--line);border-radius:9px;margin:18px 0 26px}.guide-tabs select{max-width:300px}.guide-tabs{align-items:center;padding-bottom:18px}.onboarding-link{display:block;text-align:center;font-size:13px;margin-top:20px}
+
+.publication{display:grid;gap:20px}.publication-state{padding:24px}.publication-url{font-size:1.2rem;overflow-wrap:anywhere}.publication-facts{display:grid;grid-template-columns:100px 1fr;gap:12px}.publication-facts dt{color:var(--muted)}.publication-facts dd{margin:0;overflow-wrap:anywhere}.publication-startup{display:flex;gap:10px;align-items:center}.publication-startup input{width:auto}.publication>.details{padding:16px}.publication textarea{min-height:84px}.publication .form-grid{padding:24px}.publication .actions{flex-wrap:wrap}

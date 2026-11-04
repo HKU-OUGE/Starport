@@ -29,3 +29,11 @@ Starship 在 B 上运行，可以使用 B 自己的项目与账号。它不是�
 - 公网使用 Access + Tunnel 等受保护 HTTPS 入口；不要直接映射 HTTP 端口。
 
 网络与计算隔离仍需在实际设备上验收，见[网络检查表](NETWORK.md)与[算力接入](SERVICES.md)。
+
+## 面板发布的远程入口
+
+Cloudflare API Token 和 Tunnel Token 只在 A 的私有状态目录保存，不返回浏览器、不进入命令参数，
+不发送给 Starship。每次发布只管理自己创建的资源；超时先核对，撤回先检查归属与配置。
+专用回环网关验证 Access JWT 的签名、issuer、audience、有效期和邮箱；随后移除 Cloudflare 身份
+与网络头，仅转发控制台所需的请求头。控制台访问码和 CSRF 校验继续生效。
+这条入口不会开放任意 URL 代理、SSH 或宿主文件浏览器。

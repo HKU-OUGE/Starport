@@ -46,7 +46,7 @@ Windows 使用 `py -3`；B 是 Windows 时，A 的安装命令增加 `--client-p
 | 接续 Claude | 原生 Remote Control，或独立后台会话 |
 | 看清执行过程 | 持续同步、增量消息、状态与耗时、工具输入和输出 |
 | 图片与文件 | 上传附件、断点续传、图片／视频／PDF 预览、Artifacts 快照 |
-| 手机控制 | 紧凑布局；通过 [VPN 或 Access + Tunnel](docs/REMOTE.md)访问 |
+| 手机控制 | 紧凑布局；通过 VPN，或在面板[发布 Access + Tunnel 域名](docs/REMOTE.md) |
 | 管理网络 | 导入订阅、选择主备节点、预览和应用受控出口计划 |
 | 连接算力 | 对接已有隔离训练服务，查看资源、任务、日志和结果 |
 

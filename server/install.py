@@ -74,7 +74,7 @@ def make_plan(args):
         panel['allowed_subnets'] = [str(n) for n in nets]
     if panel_path.exists():
         old = json.loads(panel_path.read_text(encoding='utf-8'))
-        for key in ('router', 'client_interface', 'monitor_port', 'links'):
+        for key in ('router', 'client_interface', 'monitor_port', 'links', 'publication_port', 'cloudflared_binary'):
             if key in old:
                 panel[key] = old[key]
         if not args.legacy_root:

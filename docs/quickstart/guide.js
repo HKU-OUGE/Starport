@@ -56,7 +56,7 @@
        blocks:[block('A · 只读连接检查',a+' tools/pair.py verify'+clientFlag)],
        hint:'原生 Desktop 会话要开启 Remote Control。独立后台会话不会自动合并进 Desktop 同一条历史。',links:[['会话与附件',docs('CONSOLE')]],details:'完成勾选是你手动记录的结果，网页不会代替真实设备验收。未做过的锁屏、重启或网络故障检查请保留为待验证。'},
       {title:'再接手机和算力',short:'扩展',place:'按需在 A 配置',text:'工作台跑通后，再增加远程入口或已有计算节点。它们不是第一次收发消息的前提。',
-       bullets:['手机：已有 VPN，或 Cloudflare Access + Tunnel。','Cloudflare：绑定自己的域名，按邮箱授权，源站指向 A 的回环 18883。','算力：接入已有隔离执行器，复用只读依赖与数据；先验收小任务。'],
+       bullets:['手机：已有 VPN，或 Cloudflare Access + Tunnel。','Cloudflare：管理面板 → 远程域名，填写 Token、域名前缀和邮箱，预览后发布。','算力：接入已有隔离执行器，复用只读依赖与数据；先验收小任务。'],
        links:[['手机访问',docs('REMOTE')],['计算节点',docs('SERVICES')]],
        details:'同一控制台的 Access 邮箱白名单不等于按会话分权。不同人的独立空间应使用独立部署、状态目录和域名。仓库不会自动创建付费云实例。'},
       {title:'留下可维护的配置',short:'维护',place:'A + B',text:'记录入口、服务名称和配置位置。更新前先确认当前没有会被打断的会话。',

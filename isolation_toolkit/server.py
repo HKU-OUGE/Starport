@@ -15,6 +15,7 @@ import uuid
 from .config import ROOT
 from .operations import Manager, monitor
 from .subscriptions import Subscriptions
+from .publication import Publication
 
 DOC_NAMES = ('GUIDE','QUICKSTART','MAC','PAIRING','REMOTE','MAINTENANCE','SKILLS',
              'CONSOLE','SERVICES','NETWORK','INSTALL','SECURITY')
@@ -35,6 +36,7 @@ def serve(config):
         raise ValueError('access_key_too_short')
     manager = Manager(config)
     subscriptions = Subscriptions(config)
+    publication = Publication(config)
     sessions, attempts = {}, defaultdict(deque)
     lock, action_lock = threading.RLock(), threading.Lock()
     hosts = {f'{h}:{config["port"]}' for h in config['listen']} | {f'localhost:{config["port"]}'}
@@ -88,7 +90,7 @@ def serve(config):
             if not self.boundary():
                 return self.respond(403, {'error': 'access_boundary_rejected'})
             path = urlsplit(self.path).path
-            files = {'/': ('index.html', 'text/html; charset=utf-8'), '/app.js': ('app.js', 'text/javascript; charset=utf-8'), '/style.css': ('style.css', 'text/css; charset=utf-8')}
+            files = {'/': ('index.html', 'text/html; charset=utf-8'), '/app.js': ('app.js', 'text/javascript; charset=utf-8'), '/publication.js': ('publication.js', 'text/javascript; charset=utf-8'), '/style.css': ('style.css', 'text/css; charset=utf-8')}
             if path in files:
                 file, mime = files[path]
                 return self.respond(200, (ROOT / 'web' / file).read_bytes(), mime)
@@ -109,6 +111,8 @@ def serve(config):
                     return self.respond(200, manager.router_status())
                 if path == '/api/proxy':
                     return self.respond(200, subscriptions.snapshot())
+                if path == '/api/publication':
+                    return self.respond(200, publication.snapshot())
                 if path == '/api/monitor':
                     with monitor_lock:
                         if time.monotonic() - monitor_cache[0] > 10:
@@ -170,6 +174,8 @@ def serve(config):
                     return self.respond(202, manager.check_router(data.get('internet') is True))
                 if self.path == '/api/proxy/import':
                     return self.respond(200, subscriptions.import_nodes(data))
+                if self.path.startswith('/api/publication/'):
+                    return self.respond(202, publication.submit(self.path.removeprefix('/api/publication/'), data))
                 if self.path == '/api/proxy/refresh':
                     return self.respond(200, subscriptions.refresh(data.get('id')))
                 if self.path == '/api/proxy/adopt':
@@ -214,7 +220,21 @@ def serve(config):
             except Exception:
                 return self.respond(503, {'error': 'operation_outcome_unknown'})
 
-    servers = [ThreadingHTTPServer((host, config['port']), Handler) for host in config['listen']]
-    for s in servers[1:]:
-        threading.Thread(target=s.serve_forever, daemon=True).start()
-    servers[0].serve_forever()
+    servers = []
+    import signal
+    previous = None
+    if threading.current_thread() is threading.main_thread():
+        def shutdown(*_):
+            raise SystemExit(0)
+        previous = signal.signal(signal.SIGTERM, shutdown)
+    try:
+        servers = [ThreadingHTTPServer((host, config['port']), Handler) for host in config['listen']]
+        for s in servers[1:]:
+            threading.Thread(target=s.serve_forever, daemon=True).start()
+        servers[0].serve_forever()
+    finally:
+        publication.close()
+        for s in servers:
+            s.server_close()
+        if previous is not None:
+            signal.signal(signal.SIGTERM, previous)

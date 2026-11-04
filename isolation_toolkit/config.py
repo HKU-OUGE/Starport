@@ -27,6 +27,9 @@ def load(path=None):
             continue
         value = Path(d[key]).expanduser()
         d[key] = str((p.parent / value).resolve() if not value.is_absolute() else value.resolve())
+    if d.get('cloudflared_binary'):
+        value = Path(d['cloudflared_binary']).expanduser()
+        d['cloudflared_binary'] = str((p.parent / value).resolve() if not value.is_absolute() else value.resolve())
     addresses = d.get('listen', ['127.0.0.1'])
     if not addresses or len(addresses) > 3:
         raise ValueError('invalid_listeners')

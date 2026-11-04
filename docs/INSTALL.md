@@ -37,7 +37,7 @@ Starship 运行在 Windows 时，给服务端安装命令增加 `--client-platfo
 
 默认会话端口 18881、管理端口 18882，仅监听回环。`--host` 指定 VPN 私有地址，`--allowed-subnet` 指定管理面板的私有访问网段。`--management-url` 设置会话控制台中的管理链接。
 
-HTTPS 可使用已有 Access + Tunnel：源站连接回环端口 18883，`--public-origin` 设置精确 HTTPS 域名。入口必须验证身份，控制台继续要求访问码和 CSRF。
+HTTPS 推荐在管理面板“远程域名”中[预览并发布](REMOTE.md)，无需重启控制台。已有手动 Access + Tunnel 仍可连接回环 18883，并用 `--public-origin` 指定精确域名。
 
 ## Starship
 
