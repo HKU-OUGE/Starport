@@ -44,6 +44,7 @@ function App(){const [managementUrl,setManagementUrl]=useState('');const [auth,s
 const [deliveries,setDeliveries]=useState({}),[sessionInfoOpen,setSessionInfoOpen]=useState(false);const composerRef=useComposerSize(text,selected);
 useEffect(()=>{setSessionInfoOpen(false);},[selected,tab,auth]);const sendLock=useRef(false),sendAttempts=useRef(new Map()),currentSession=useRef(selected);currentSession.current=selected;
 useEffect(()=>{if(!auth){sendAttempts.current.clear();setDeliveries({});}},[auth]);
+useEffect(()=>{window.dispatchEvent(new Event('console-startup-ready'));},[]);
 const openArtifact=useCallback(url=>{const m=/^https:\/\/claude\.ai\/(?:code\/)?artifact\/([A-Za-z0-9_-]{12,80})(?:[?#].*)?$/.exec(url||'');if(selected&&m)setArtifactSelection({session:selected,id:m[1]});},[selected]);
 useEffect(()=>{setArtifactSelection(null);},[selected,auth]);
 useEffect(()=>{const expire=()=>{csrf='';setAuth(false);setSelected(null);};window.addEventListener('console-auth-expired',expire);return()=>window.removeEventListener('console-auth-expired',expire);},[]);
