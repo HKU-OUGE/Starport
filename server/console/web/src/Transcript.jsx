@@ -23,7 +23,7 @@ function MediaCard({item, session, onPdf}) {
   const url = item.available ? mediaUrl(session, item) : null;
   return <figure className="media-card">
     <figcaption><strong>{item.name}</strong><span>{item.size !== undefined ? size(item.size) : ''}</span></figcaption>
-    {!url || failed ? <p className="media-error">{item.pending?'正在准备 PDF 附件…':item.error==='document_not_on_device'?'文件位于其他设备，当前连接无法读取原文件。':failed==='video'?'浏览器无法播放此视频，可以尝试下载后查看。':'附件暂时无法读取。文件可能已移动、变更，或不在此会话的可读范围。'}</p> :
+    {!url || failed ? <p className="media-error">{item.pending?'正在准备附件…':item.error==='document_not_on_device'?'暂时未能定位这个会话的原文件，正在重新核对。':failed==='video'?'浏览器无法播放此视频，可以尝试下载后查看。':'附件暂时无法读取。文件可能已移动、变更，或不在此会话的可读范围。'}</p> :
       item.mime==='application/pdf' ? <div className="pdf-card-body"><span className="pdf-file-symbol">PDF</span><p>直接阅读文档，支持翻页与缩放。</p><button onClick={()=>onPdf?.(item)}>预览 PDF</button></div> :
       item.mime.startsWith('video/') ? <video src={url} controls playsInline preload="none" onError={()=>setFailed('video')} aria-label={item.name}/> :
         <a href={url} target="_blank" rel="noreferrer"><img src={url} alt={item.name} loading="lazy" onError={()=>setFailed(true)}/></a>}
