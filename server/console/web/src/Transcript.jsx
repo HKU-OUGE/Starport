@@ -1,16 +1,14 @@
-import React, {memo, useMemo, useState, useCallback, lazy, Suspense} from 'react';
-import {Streamdown} from 'streamdown';
-import {code} from '@streamdown/code';
 import 'streamdown/styles.css';
-import {attachDocuments,documentReadKey,registeredReference} from './documentFiles.js';
+import React, {memo, useMemo, useState, useCallback, lazy, Suspense} from 'react';
+import {attachDocuments,documentReadKey} from './documentFiles.js';
 import {useDocumentFiles} from './useDocumentFiles.js';
 const PdfPreview=lazy(()=>import('./PdfPreview.jsx'));
 
-const plugins = {code};
-const noRawHtml = [];
 const time = value => value ? new Date(value).toLocaleString('zh-CN', {month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:false}) : '';
 const size = value => value < 1048576 ? `${(value / 1024).toFixed(0)} KiB` : `${(value / 1048576).toFixed(1)} MiB`;
-export const mediaUrl = (session, item) => `/api/${item.source==='document'?'documents':'media'}/${encodeURIComponent(session)}/${item.id}`;
+import {mediaUrl} from './markdownLinks.js';
+import {Markdown,MarkdownStatus} from './ProgressiveMarkdown.jsx';
+export {Markdown,mediaUrl};
 function eventKey(event) {
   let hash=2166136261;
   const content=(event.text||'')+(event.attachments||[]).map(x=>x.id||x.name).join('|');
@@ -35,19 +33,6 @@ function MediaList({items, session, onPdf}) {
   return items?.length ? <div className="media-list">{items.map((item,index)=><MediaCard key={item.id || item.name+'-'+index} item={item} session={session} onPdf={onPdf}/>)}</div> : null;
 }
 
-export const Markdown = memo(function Markdown({text, streaming=false, attachments=[], session, onArtifact, onPdf}) {
-  const components = useMemo(()=>({
-    strong: ({children}) => <strong>{children}</strong>,
-    a: ({href, children}) => !href?<span>{children}</span>:<a href={href} target="_blank" rel="noreferrer" className={onArtifact&&/^https:\/\/claude\.ai\/(?:code\/)?artifact\/[A-Za-z0-9_-]{12,80}(?:[?#].*)?$/.test(href||'')?'artifact-link':undefined} onClick={e=>{if(e.metaKey||e.ctrlKey)return;const pdf=attachments.find(a=>a.available&&a.mime==='application/pdf'&&mediaUrl(session,a)===href);if(pdf&&onPdf){e.preventDefault();onPdf(pdf);}else if(onArtifact&&/^https:\/\/claude\.ai\/(?:code\/)?artifact\/[A-Za-z0-9_-]{12,80}(?:[?#].*)?$/.test(href||'')){e.preventDefault();onArtifact(href);}}}>{children}</a>,
-    img: ({src, alt}) => <span className="inline-media-reference">{src?.startsWith('/api/media/') ? <a href={src} target="_blank" rel="noreferrer">{alt || '查看图片'}</a> : /^https?:\/\//.test(src||'') ? <a href={src} target="_blank" rel="noreferrer">{alt || '外部图片'}</a> : (alt || '图片见附件') }</span>,
-    table: ({children}) => <div className="table-scroll"><table>{children}</table></div>,
-  }), [onArtifact,onPdf,attachments,session]);
-  const urls = new Map(attachments.filter(a=>a.available && a.reference).map(a=>[a.reference, mediaUrl(session,a)]));
-  const urlTransform = value => registeredReference(urls,value) || (/^(https?:\/\/|mailto:|#)/i.test(value) ? value : '');
-  return <Streamdown className="markdown" mode={streaming?'streaming':'static'} isAnimating={streaming}
-    plugins={plugins} components={components} skipHtml rehypePlugins={noRawHtml} urlTransform={urlTransform}
-    controls={false} shikiTheme={['github-light','github-light']} lineNumbers={false}>{text || ''}</Streamdown>;
-});
 
 function ToolCard({event, results=[], session, onPdf}) {
   const [open,setOpen] = useState(false);
@@ -108,7 +93,7 @@ export const Transcript = memo(function Transcript({events, session, onArtifact,
     }
     return {results,ids};
   },[events]);
-  return <>{enriched.map((e,i)=> e.role==='tool_result'&&ids.has(e.tool_id) ? null : e.role==='tool' ?
+  return <><MarkdownStatus/>{enriched.map((e,i)=> e.role==='tool_result'&&ids.has(e.tool_id) ? null : e.role==='tool' ?
     <ToolCard key={'tool-'+(e.tool_id||e.seq+'-'+i)} event={e} results={results.get(e.tool_id)} session={session} onPdf={openPdf}/> :
     <Message key={eventKey(e)} event={e} session={session} onArtifact={onArtifact} onPdf={openPdf}/>)}
     {pdf&&<Suspense fallback={<div className="pdf-loading">正在加载 PDF 阅读器…</div>}><PdfPreview key={session+pdf.id} item={pdf} url={mediaUrl(session,pdf)} close={()=>setPdf(null)}/></Suspense>}</>;

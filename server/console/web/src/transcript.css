@@ -46,3 +46,5 @@
 @media(max-width:760px){.markdown{font-size:14px}.markdown h2{font-size:19px}.tool-toggle{padding:10px 9px;gap:6px}.tool-summary{font-size:11px}.command-preview{padding-left:28px;font-size:11px}.tool-body{padding:12px 10px}.command-content,.tool-output{font-size:11px;max-height:310px}.media-list{grid-template-columns:1fr}.messages{padding-top:18px}}
 
 .pdf-card-body{padding:18px 14px;color:#627686;font-size:12px;line-height:1.7}.pdf-file-symbol{display:inline-block;padding:6px 9px;border:1px solid #d2dfe5;background:#eaf2f5;color:#36566a;font-weight:700;border-radius:4px;letter-spacing:.07em}.pdf-card-body p{margin:10px 0}.pdf-card-body button{font-size:12px}.tool-card>.media-list{margin:10px;max-width:calc(100% - 20px)}
+
+.format-status{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;font-size:12px;color:#62757b;padding:8px 0}.format-status button{font-size:12px;padding:5px 9px}.basic-markdown pre{border:1px solid #dce4e9;border-radius:8px;margin:15px 0;background:#f8fafc}
