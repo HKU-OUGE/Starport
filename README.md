@@ -48,7 +48,7 @@ Windows 使用 `py -3 setup.py server` / `py -3 setup.py client`，或运行 `in
 | 阅读与下载 | Markdown、图片、视频、PDF、Artifacts HTML 快照 |
 | 手机访问 | 紧凑会话布局、折叠信息、压缩响应、静态资源缓存 |
 | 管理面板 | 服务注册、软路由检查、订阅导入、主备节点选择 |
-| 算力适配 | 服务器掉线／重连与资源规格自动同步，任务、传输、存储与清理监控 |
+| 算力适配 | 节点与资源自动同步、专用任务断线接管、日志续读、结果续传 |
 
 发送消息时自动简体转繁体，无发送预览。停止、新建和批准操作保留确认；会话与文件接口始终需要认证。
 
@@ -60,6 +60,7 @@ client/              Starship 设备服务与跨平台安装器
 starport_common/     跨平台通信、权限与服务生命周期
 router/              Linux 软路由虚拟机执行入口
 isolation_toolkit/   管理面板、服务发现和软路由适配
+compute_runtime/     Linux 专用训练执行器的断线接管组件
 web/                 管理面板界面
 bin/                 starport / starship 命令
 examples/            配置示例

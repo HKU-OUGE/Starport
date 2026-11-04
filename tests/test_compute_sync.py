@@ -1,5 +1,6 @@
 import ast
 import contextlib
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -180,6 +181,63 @@ class RecoveryBoundaryTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as root:self.assertEqual(self.fixture(root,runtime_exists=True)['released'],[])
     def test_mismatched_binding_cannot_release(self):
         with tempfile.TemporaryDirectory() as root:self.assertEqual(self.fixture(root,wrong_id=True)['released'],[])
+
+    def stopped_fixture(self, root, *, running=False, changed=False, live=False, deletion_confirmed=True):
+        from isolation_toolkit import compute_remote
+        root=Path(root);runtime=root/'runtime';runtime.mkdir();leases=root/'dsw-leases';leases.mkdir()
+        jid='a'*32;job=root/'dsw-jobs'/jid;job.mkdir(parents=True)
+        base=root/'scratch';base.mkdir();(base/'config.json').write_text('{}')
+        atomic(leases/(jid+'.json'),{'id':jid,'phase':'running','gpu_indices':[0],'cpu_indices':[1]})
+        atomic(job/'cleanup-context.private.json',{'version':'test','job_id':jid,'base':str(base),
+               'config_sha256':'0'*64 if changed else hashlib.sha256(b'{}').hexdigest()})
+        (job/'result.txt').write_text('preserve');operations=[];in_transaction=[False]
+        @contextlib.contextmanager
+        def transaction():
+            in_transaction[0]=True
+            try:yield
+            finally:in_transaction[0]=False
+        def remove_runtime(path,**kwargs):
+            self.assertFalse(in_transaction[0]);self.assertTrue(kwargs['stopped_only'])
+            self.assertEqual(path,base);operations.append('retire-stopped');return deletion_confirmed,[]
+        def receipt(job,base,history,**kwargs):
+            self.assertTrue(kwargs['recovered']);atomic(job/'cleanup.json',{'cleaned':True})
+        r=types.SimpleNamespace(JOBS=root/'dsw-jobs',LEASES=leases,valid=lambda _:None,
+            transaction=transaction,release=lambda *args,**kw:(job/'cleanup.json').exists())
+        c=types.SimpleNamespace(VERSION='test',valid_job=lambda p:p,load=load,save=atomic,
+            allocation_locks=lambda *args:contextlib.nullcontext(),base_location=lambda p:Path(p),
+            binding=lambda job,path:path,associated_processes=lambda *args:[123] if live else [],
+            listing=lambda _: [{'status':'running' if running else 'stopped'}],
+            stopped=lambda rows:all(x['status']=='stopped' for x in rows),
+            remove_runtime=remove_runtime,receipt=receipt)
+        with patch.dict('sys.modules',{'resources':r,'cleanup_recovery':c}):
+            result=compute_remote.recover({'runtimes':[str(runtime)]},[jid])
+        self.assertEqual((job/'result.txt').read_text(),'preserve')
+        return result,operations
+
+    def test_verified_stopped_runtime_without_final_lifecycle_can_release(self):
+        with tempfile.TemporaryDirectory() as root:
+            result,ops=self.stopped_fixture(root)
+            self.assertEqual(len(result['released']),1);self.assertEqual(ops,['retire-stopped'])
+
+    def test_running_registry_is_never_deleted(self):
+        with tempfile.TemporaryDirectory() as root:
+            result,ops=self.stopped_fixture(root,running=True)
+            self.assertFalse(result['released']);self.assertFalse(ops)
+
+    def test_changed_runtime_configuration_is_never_deleted(self):
+        with tempfile.TemporaryDirectory() as root:
+            result,ops=self.stopped_fixture(root,changed=True)
+            self.assertFalse(result['released']);self.assertFalse(ops)
+
+    def test_live_process_wins_over_stopped_registry(self):
+        with tempfile.TemporaryDirectory() as root:
+            result,ops=self.stopped_fixture(root,live=True)
+            self.assertFalse(result['released']);self.assertFalse(ops)
+
+    def test_unconfirmed_runtime_removal_preserves_allocation(self):
+        with tempfile.TemporaryDirectory() as root:
+            result,_=self.stopped_fixture(root,deletion_confirmed=False)
+            self.assertFalse(result['released'])
 
 
 if __name__=='__main__':unittest.main()

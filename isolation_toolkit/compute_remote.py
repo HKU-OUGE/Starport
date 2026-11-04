@@ -17,6 +17,47 @@ def atomic(path, value):
     temp.write_text(json.dumps(value)); temp.chmod(0o600); temp.replace(path)
 
 
+def proxy_https(config, budget_seconds=12):
+    """Bounded HTTPS retries through the existing proxy, with no direct fallback."""
+    deadline = time.monotonic() + budget_seconds
+    context = ssl.create_default_context()
+
+    def remaining():
+        value = min(4, deadline - time.monotonic())
+        if value <= 0:
+            raise TimeoutError('proxy_probe_deadline')
+        return value
+
+    targets = [('www.gstatic.com', '/generate_204'), ('example.com', '/'),
+               ('www.gstatic.com', '/generate_204')]
+    for host, path in targets:
+        if time.monotonic() >= deadline:
+            break
+        try:
+            with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as conn:
+                conn.settimeout(remaining()); conn.connect(config['proxy_socket'])
+                conn.sendall(f'CONNECT {host}:443 HTTP/1.1\r\nHost: {host}:443\r\n\r\n'.encode())
+                header = b''
+                while not header.endswith(b'\r\n\r\n') and len(header) < 8192:
+                    conn.settimeout(remaining()); chunk = conn.recv(1)
+                    if not chunk:
+                        raise RuntimeError('proxy_closed')
+                    header += chunk
+                if not header.endswith(b'\r\n\r\n') or b' 200 ' not in header.split(b'\r\n', 1)[0]:
+                    raise RuntimeError('proxy_rejected')
+                conn.settimeout(remaining())
+                with context.wrap_socket(conn, server_hostname=host) as secure:
+                    secure.settimeout(remaining())
+                    secure.sendall(f'HEAD {path} HTTP/1.1\r\nHost: {host}\r\nConnection: close\r\n\r\n'.encode())
+                    secure.settimeout(remaining())
+                    if not secure.recv(1024).startswith(b'HTTP/'):
+                        raise RuntimeError('https_failed')
+                return True
+        except (OSError, ValueError, RuntimeError):
+            pass
+    return False
+
+
 def probe(config):
     cg = Path('/sys/fs/cgroup')
     cpu = len(os.sched_getaffinity(0))
@@ -48,21 +89,8 @@ def probe(config):
               'capacities': [json.loads((p/'capacity.json').read_text()) if (p/'capacity.json').exists() else None for p in paths],
               'reservations': [{k: d.get(k) for k in ('id', 'phase', 'gpus', 'cpus', 'memory_gib')} for d in reserved]}
     if not runtime: result['error'] = 'runtime_unavailable'
-    try:
-        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as conn:
-            conn.settimeout(6); conn.connect(config['proxy_socket'])
-            conn.sendall(b'CONNECT example.com:443 HTTP/1.1\r\nHost: example.com:443\r\n\r\n')
-            header = b''
-            while not header.endswith(b'\r\n\r\n') and len(header) < 8192:
-                chunk = conn.recv(1)
-                if not chunk: raise RuntimeError('proxy_closed')
-                header += chunk
-            if b' 200 ' not in header.split(b'\r\n', 1)[0]: raise RuntimeError('proxy_rejected')
-            with ssl.create_default_context().wrap_socket(conn, server_hostname='example.com') as secure:
-                secure.sendall(b'HEAD / HTTP/1.1\r\nHost: example.com\r\nConnection: close\r\n\r\n')
-                if not secure.recv(1024).startswith(b'HTTP/'): raise RuntimeError('https_failed')
-        result['proxy'] = True
-    except (OSError, ValueError, RuntimeError): result['error'] = 'proxy_unavailable'
+    result['proxy'] = proxy_https(config)
+    if not result['proxy']: result['error'] = 'proxy_unavailable'
     return result
 
 
@@ -87,6 +115,50 @@ def limits(config, capacity):
     return {'updated': len(changed), 'capacity': capacity}
 
 
+def inspect_tasks(config, task_ids):
+    """Prove a stale controller record ended without touching a live runtime."""
+    runtime = Path(config['runtimes'][0]); sys.path.insert(0, str(runtime))
+    import resources
+    import cleanup_recovery as cleanup
+    ended = []
+    for jid in task_ids[:16]:
+        try:
+            resources.valid(jid)
+            job = cleanup.valid_job(resources.JOBS/jid)
+            ctx = cleanup.load(job/'cleanup-context.private.json')
+            receipt = cleanup.load(job/'cleanup.json')
+            lifecycle = cleanup.load(job/'lifecycle-private.json')
+            if not all(isinstance(value, dict) for value in (ctx, receipt, lifecycle)): continue
+            if (ctx.get('version') != cleanup.VERSION or ctx.get('job_id') != jid or
+                    receipt.get('version') != cleanup.VERSION or receipt.get('job_id') != jid or
+                    not receipt.get('cleaned') or not receipt.get('runtime_registry_empty') or
+                    type(lifecycle.get('returncode')) is not int):
+                continue
+            base = cleanup.base_location(ctx['base'])
+            if receipt.get('base') != str(base): continue
+            with resources.transaction():
+                lease_path = resources.LEASES/(jid+'.json')
+                allocation = cleanup.load(lease_path) if lease_path.exists() else None
+            if allocation and allocation.get('id') != jid: continue
+            with cleanup.allocation_locks(resources.LEASES, allocation) if allocation else contextlib.nullcontext():
+                if base.exists() or base.is_symlink() or cleanup.associated_processes(job, base): continue
+                alternative = False
+                for other in Path('/tmp').glob('isolated-sandbox-*'):
+                    try: cleanup.binding(job, other); alternative = True; break
+                    except (OSError, ValueError, KeyError): pass
+                if alternative: continue
+                reason = lifecycle.get('stop_reason')
+                if reason not in ('control_heartbeat_timeout', 'training_timeout', 'cancelled'):
+                    reason = 'remote_task_ended'
+                ended.append({'id': jid, 'verified_ended': True,
+                              'exit_code': lifecycle['returncode'], 'reason': reason,
+                              'finished_at': receipt.get('checked_at'),
+                              'result_bundle_present': (job/'result.zip').exists()})
+        except (OSError, ValueError, KeyError, TypeError):
+            continue
+    return {'ended': ended}
+
+
 def recover(config, task_ids):
     runtime = Path(config['runtimes'][0]); sys.path.insert(0, str(runtime))
     import resources
@@ -97,19 +169,32 @@ def recover(config, task_ids):
         if not (resources.LEASES/(jid+'.json')).exists(): recovered.append(jid); continue
         if resources.release(jid, abort=True): recovered.append(jid); continue
         # A restart can remove /tmp before the supervisor writes its final receipt.
-        # Never infer release from SSH EOF: require a bound, absent runtime and free locks.
+        # Never infer release from SSH EOF: require a bound, absent or stopped
+        # runtime, no associated processes, and free allocation locks.
         try:
             job = cleanup.valid_job(job)
             with (resources.LEASES/(jid+'.cleanup.lock')).open('a') as serial:
                 fcntl.flock(serial, fcntl.LOCK_EX | fcntl.LOCK_NB)
                 with resources.transaction():
                     allocation = cleanup.load(resources.LEASES/(jid+'.json'))
-                    if allocation['phase'] != 'running': continue
-                    with cleanup.allocation_locks(resources.LEASES, allocation):
-                        ctx = cleanup.load(job/'cleanup-context.private.json')
-                        if ctx.get('version') != cleanup.VERSION or ctx.get('job_id') != jid: continue
-                        base = cleanup.base_location(ctx['base'])
-                        if base.exists() or base.is_symlink() or cleanup.associated_processes(job, base): continue
+                if allocation['phase'] != 'running': continue
+                # Keep the task's allocation locks, not the global admission lock,
+                # while checking or retiring its stopped runtime.
+                with cleanup.allocation_locks(resources.LEASES, allocation):
+                    ctx = cleanup.load(job/'cleanup-context.private.json')
+                    if ctx.get('version') != cleanup.VERSION or ctx.get('job_id') != jid: continue
+                    base = cleanup.base_location(ctx['base'])
+                    if base.is_symlink() or cleanup.associated_processes(job, base): continue
+                    if base.exists():
+                        cleanup.binding(job, base)
+                        import hashlib
+                        if hashlib.sha256((base/'config.json').read_bytes()).hexdigest() != ctx.get('config_sha256'): continue
+                        rows = cleanup.listing(base)
+                        if not cleanup.stopped(rows): continue
+                        ok, history = cleanup.remove_runtime(base, stopped_only=True, attempts=1)
+                        if not ok or cleanup.associated_processes(job, base): continue
+                        cleanup.receipt(job, base, history, recovered=True)
+                    else:
                         alternative = False
                         for other in Path('/tmp').glob('isolated-sandbox-*'):
                             try: cleanup.binding(job, other); alternative = True; break
@@ -129,7 +214,7 @@ if __name__ == '__main__':
     try:
         request = json.load(sys.stdin); config = request['config']
         op = request['op']
-        value = probe(config) if op == 'probe' else limits(config, request['capacity']) if op == 'limits' else recover(config, request['task_ids']) if op == 'recover' else None
+        value = probe(config) if op == 'probe' else limits(config, request['capacity']) if op == 'limits' else recover(config, request['task_ids']) if op == 'recover' else inspect_tasks(config, request['task_ids']) if op == 'inspect_tasks' else None
         if value is None: raise ValueError('unsupported_operation')
         print(json.dumps({'ok': True, 'result': value}))
     except Exception as exc:

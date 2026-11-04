@@ -16,6 +16,7 @@ import time
 import urllib.request
 import uuid
 from .compute_availability import service_capacity, transition
+from . import admission_recovery
 
 VERSION = 1
 
@@ -91,6 +92,7 @@ class Reconciler:
         self.remote = remote or self.ssh
         self.api = api or self.http
         self.restart = restart or self.restart_service
+        self.custom_restart = restart is not None
         self.snapshot = load(self.status, {'version': VERSION, 'nodes': {}})
         self.snapshot['max_stale_seconds'] = config.get('max_stale_seconds', 120)
         self.script = Path(__file__).with_name('compute_remote.py').read_text()
@@ -124,24 +126,58 @@ class Reconciler:
         if not command: raise RuntimeError('api_reload_unavailable')
         subprocess.run(command, check=True, capture_output=True, timeout=20)
 
+    def api_current(self, node, health):
+        staged = (self.base/node['directory']/'api.py').read_text()
+        if health.get('resource_profile_version') != 2:return False
+        for key in ('startup_recovery_version','durable_control_version'):
+            expected=re.search(r"'"+key+r"':(\d+)",staged)
+            if expected and health.get(key)!=int(expected.group(1)):return False
+        return True
+
+    def reload_quiescent(self, node):
+        # Admission is already paused. Older APIs do not expose reservations
+        # currently inside an SSH call, so require no request threads or child
+        # processes before reloading their controller.
+        if self.custom_restart: return True
+        command = node.get('restart_command', [])
+        if len(command) != 4 or command[:3] != ['systemctl', '--user', 'restart']:
+            return False
+        result = subprocess.run(['systemctl', '--user', 'show', command[-1],
+                                 '-p', 'MainPID', '--value'], capture_output=True, text=True, timeout=5)
+        pid = result.stdout.strip()
+        if result.returncode or not pid.isdigit() or int(pid) <= 1: return False
+        task_root = Path('/proc')/pid/'task'
+        deadline = time.monotonic()+3
+        while True:
+            try:
+                threads = list(task_root.iterdir())
+                if len(threads) == 1 and not (threads[0]/'children').read_text().strip(): return True
+            except OSError: return False
+            if time.monotonic() >= deadline: return False
+            time.sleep(.1)
+
     def activate_idle_api(self, node, health):
-        if health.get('resource_profile_version') == 2: return health
+        if self.api_current(node, health): return health
         if health.get('active_jobs') or health.get('busy'): return health
         management = Path(node['state_root'])/'management.json'
         before = load(management, {'accepting_new_jobs':True})
-        paused = self.api(node, '/management/pause', {}, True)
+        if before.get('accepting_new_jobs', True):
+            self.api(node, '/management/pause', {}, True)
         stamp = management.stat().st_mtime_ns
         marker = self.state/(node['name']+'.reload.json')
         atomic(marker, {'resume':before.get('accepting_new_jobs',True),'pause_stamp':stamp})
+        reload_started = False
         try:
             checked = self.api(node, '/health')
             if checked.get('active_jobs') or checked.get('busy'): return checked
+            if not self.reload_quiescent(node): return checked
+            reload_started = True
             self.restart(node)
             deadline = time.monotonic()+15
             while True:
                 try:
                     checked = self.api(node, '/health')
-                    if checked.get('resource_profile_version') == 2: return checked
+                    if self.api_current(node, checked): return checked
                 except Exception: pass
                 if time.monotonic() >= deadline: raise RuntimeError('api_reload_failed')
                 time.sleep(.25)
@@ -150,7 +186,7 @@ class Reconciler:
             if before.get('accepting_new_jobs', True) and management.exists() and management.stat().st_mtime_ns == stamp:
                 try:
                     checked = self.api(node, '/health')
-                    if checked.get('resource_profile_version') == 2 or checked.get('active_jobs'):
+                    if not reload_started or self.api_current(node, checked) or checked.get('active_jobs'):
                         self.api(node, '/management/resume', {}, True)
                         marker.unlink(missing_ok=True)
                 except Exception: pass
@@ -184,6 +220,57 @@ class Reconciler:
             current.update(allocation_released=True, cleanup_finished=True)
             atomic(path, current)
         return result['released']
+
+    def recover_orphans(self, node, health):
+        # Existing APIs do not list individual workers. Reconcile only when the
+        # entire controller is idle, never from a stale heartbeat or SSH EOF alone.
+        if health.get('busy') is not False: return []
+        candidates = {}
+        now = time.time()
+        for path in (Path(node['state_root'])/'jobs').glob('*/state.json'):
+            try: raw = path.read_bytes(); value = json.loads(raw)
+            except FileNotFoundError: continue
+            if value.get('status') in ('failed', 'cancelled', 'completed'): continue
+            times = [value.get(key, 0) for key in ('last_control_heartbeat_at', 'last_heartbeat_at', 'heartbeat_at', 'started_at', 'created_at')]
+            if any(type(t) not in (int, float) for t in times): continue
+            if now - max(times) < 120: continue
+            candidates[path.parent.name] = (path, raw)
+        if not candidates: return []
+        proof = self.remote(node, 'inspect_tasks', task_ids=list(candidates)[:16])
+        ended = {row['id']: row for row in proof.get('ended', [])
+                 if row.get('verified_ended') and row['id'] in candidates and
+                 not row.get('result_bundle_present')}
+        # A complete remote result bundle needs collection, not a synthetic
+        # failure. Keep its record and archive intact for result recovery.
+        if not ended or self.api(node, '/health').get('busy') is not False: return []
+        released = self.remote(node, 'recover', task_ids=list(ended))['released']
+        reconciled = []
+        for jid in released:
+            if jid not in ended: continue
+            path, original = candidates[jid]
+            if path.read_bytes() != original: continue
+            if self.api(node, '/health').get('busy') is not False: break
+            current = json.loads(original); row = ended[jid]
+            current.update(status='cancelled' if row['reason'] == 'cancelled' else 'failed', exit_code=row['exit_code'], error=row['reason'],
+                           error_message='The remote task ended after the controller disconnected. Cleanup was verified; no complete result bundle was found.',
+                           failure_phase='control', allocation_released=True, cleanup_finished=True,
+                           finished_at=row.get('finished_at') or now, reconciled_at=now,
+                           recovered_after_controller_restart=True)
+            audit = self.state/'recovered-records'/node['name']/(jid+'.json')
+            if not audit.exists(): atomic(audit, json.loads(original))
+            atomic(path, current); reconciled.append(jid)
+        return reconciled
+
+    def resume_startup(self, node, health):
+        before = admission_recovery.read(node['state_root'])
+        if (before.get('pause_owner') != admission_recovery.OWNER or
+                not before.get('recovery_id') or
+                ((health.get('busy') is not False or health.get('active_jobs')) and not health.get('startup_recovery_ready')) or
+                health.get('startup_recovery_version') != 1):
+            return False
+        result = self.api(node, '/management/recover-startup',
+                          {'recovery_id': before['recovery_id']}, True)
+        return bool(result.get('recovered'))
 
     def publish(self, node, state, capacity=None):
         with self.mutex, file_lock(self.base/'pool-update.lock'):
@@ -239,16 +326,19 @@ class Reconciler:
                 if node['name'] in multi.get('nodes', {}):
                     multi['nodes'][node['name']].update(desired); atomic(multi_path,multi)
                 patch_api(directory/'api.py', self.state/'api-backups')
-            released = self.recover_terminal(node)
+            released = self.recover_orphans(node, health)
+            released += self.recover_terminal(node)
             health = self.activate_idle_api(node, self.api(node, '/health'))
             health = self.api(node, '/health')
+            if state['state'] == 'online' and self.resume_startup(node, health):
+                health = self.api(node, '/health')
             # Older busy APIs keep their workers. Advertise only limits they can accept.
             effective = {'gpus': min(desired['gpus'], health.get('max_gpus',0)),
                          'cpus': min(desired['cpus'], health.get('cpu_budget',0)),
                          'memory_gib': min(desired['memory_gib'], health.get('memory_budget_gib',0))}
             if effective['cpus'] < 1 or effective['memory_gib'] < 2: raise RuntimeError('api_capacity_unavailable')
             state.update(hardware=observation['hardware'], target_capacity=desired, capacity=effective,
-                         capacity_pending=effective != desired, api_reload_pending=health.get('resource_profile_version') != 2,
+                         capacity_pending=effective != desired, api_reload_pending=not self.api_current(node, health),
                          recovered_tasks=released, accepting_new_jobs=bool(health.get('accepting_new_jobs')))
             if state['state']=='online' and not health.get('accepting_new_jobs'): state['state']='paused'
             self.publish(node, state, effective)
